@@ -126,7 +126,31 @@ function render(){document.documentElement.style.setProperty('--accent',COLORS[D
 function renderCards(){let q=$('#search').value.trim().toLowerCase();for(let region of ['ko','west']){$('#'+region+'Grid').innerHTML=DATA[state.emotion].works.filter(a=>a.region===region&&(a.artist+a.title).toLowerCase().includes(q)).map(a=>{let m=meta(a),selected=state.picks[region]===a.id;return `<article class="card ${selected?'chosen':''}" data-card="${a.id}">${art(a)}<div class="card-info"><h3>${esc(a.title)}</h3><div class="artist">${esc(a.artist)}${m.year?' · '+esc(m.year):''}</div>${m.desc?`<p class="art-question">${esc(m.desc)}</p>`:''}<p class="art-question">${QUESTIONS[DATA[state.emotion].group]}</p><div class="status">${review(a)?'△ 작품 정보 검토 필요':hasDirect(a)?'↗ 작품 페이지 연결됨 · 확대 지원 확인':imageCandidatesFor(a).length?'↗ 작품 이미지 원본 연결':'△ 정확한 작품 이미지 확인 필요'}</div>${sourceLink(a)}${searchLinks(a)}<div class="card-bottom"><button class="pick" data-pick="${a.id}" aria-pressed="${selected}">${selected?'✓ 선택됨':'＋ 이 작품 선택'}</button><button class="edit" data-edit="${a.id}" aria-label="${esc(a.title)} 이미지와 정보 편집">⋯</button></div></div></article>`}).join('')||'<div class="search-empty">이 감정의 추천 목록에 검색 결과가 없어요.</div>'}loadImages()}
 function chosen(){return ['ko','west'].map(r=>ALL.find(a=>a.id===state.picks[r])).filter(Boolean)}
 function renderDock(){let arr=chosen();$('#selectionText').innerHTML=arr.length?`선택한 작품: ${esc(baseTitle(arr[0]))}<span>한 작품을 깊이 감상하며 내 마음을 살펴보세요.</span>`:'마음에 끌리는 작품 한 점을 선택해 보세요.';$('#compareBtn').disabled=$('#startBtn').disabled=arr.length===0}
-function loadImages(){}
+function loadImages(){
+ document.querySelectorAll('img[data-art-image]').forEach(img=>{
+  if(img.dataset.fallbackReady)return;
+  img.dataset.fallbackReady='1';
+  const a=DATA.flatMap(e=>e.works).find(w=>w.id===img.dataset.artId);
+  if(!a)return;
+  const candidates=imageCandidatesFor(a).filter(u=>safeURL(u));
+  let index=Math.max(0,candidates.indexOf(img.getAttribute('src')));
+  img.addEventListener('error',()=>{
+   index++;
+   if(index<candidates.length){img.src=candidates[index];return;}
+   img.style.display='none';
+   const notice=document.createElement('span');
+   notice.className='image-unavailable';
+   notice.textContent='이미지를 불러올 수 없습니다 · 작품 제목을 눌러 원본 보기';
+   img.insertAdjacentElement('afterend',notice);
+  });
+ });
+}
+// 새로 그려지는 작품 이미지에도 실패 시 다음 출처를 시도합니다.
+document.addEventListener('error',event=>{
+ const img=event.target;
+ if(!(img instanceof HTMLImageElement)||!img.matches('[data-art-image]')||img.dataset.fallbackReady)return;
+ loadImages();
+},true);
 
 function go(page){hideBlankExamples();activePage=['explore','exhibition'].includes(page)?page:'explore';for(let id of ['explore','studio','screening','exhibition'])$('#'+id).classList.toggle('hidden',id!==activePage);document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===activePage));$('#dock').classList.toggle('hidden',activePage!=='explore');if(activePage==='studio')renderStudio();if(activePage==='screening')renderGallery();if(activePage==='exhibition')renderExhibition();if(location.hash!=='#'+activePage){try{history.replaceState(null,'','#'+activePage)}catch{}};window.scrollTo(0,0)}
 function promptText(){let arr=chosen();return `너는 학생의 미술 감상을 돕는 대본 코치야.\n선택한 감정: ${DATA[state.emotion].name}\n${arr.map(a=>(a.region==='ko'?'한국미술':'서양미술')+': '+a.artist+' <'+a.title+'>').join('\n')}\n\n두 작품을 비교 감상하는 60~90초 분량 영상 내레이션의 괄호형 빈칸 대본을 만들어줘. 도입 → 한국미술 감상 → 서양미술 감상 → 비교 → 나의 감정 정리 순서로 구성해줘.\n학생이 직접 관찰할 (눈에 띈 색), (붓질과 질감), (작은 디테일), (느낀 감정), (그렇게 느낀 이유)를 괄호형 빈칸으로 남겨줘. 관찰과 감정을 대신 작성하지 마. 감정은 작가의 의도로 단정하지 마.\n작품 제목이나 작가가 불확실하면 먼저 확인이 필요하다고 알려줘. 확인하지 않은 제작 연도, 소장처, 사실을 지어내지 마. 쉬운 구어체로, 설명 없이 대본만 출력해줘.${arr.some(review)?'\n주의: '+arr.filter(review).map(a=>a.title+' — '+review(a)).join('\n'):''}`}
