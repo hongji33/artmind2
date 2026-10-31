@@ -1,5 +1,6 @@
 // Resolution-independent illustrated people. No image sheets, network or idle loop.
 export const avatarOptions={
+ expression:['잔잔한 미소','활짝 웃음','차분한 표정','생각하는 표정','놀란 표정','윙크'],
  hair:['숏컷','단발','긴 머리','포니테일','곱슬머리','올림머리'],
  outfit:['셔츠와 팬츠','후드와 데님','니트와 팬츠','재킷 셋업','원피스'],
  skin:['#f2c9ac','#dba27c','#b97d59','#80543e'],
@@ -7,10 +8,10 @@ export const avatarOptions={
  color:['#3e695d','#7093ad','#bb7789','#8b79a2','#bc9654','#394b66']
 };
 export const avatarLabels={skin:['밝은 살구','따뜻한 베이지','브론즈','깊은 브라운'],hairColor:['흑갈색','밤색','캐러멜','블루 블랙'],color:['포레스트','스카이','로즈','라벤더','샌드','네이비']};
-export const defaultAppearance={hair:1,outfit:3,skin:0,hairColor:0,color:0};
+export const defaultAppearance={hair:1,outfit:3,skin:0,hairColor:0,color:0,expression:0};
 export function normalizeAppearance(value={}){return Object.fromEntries(Object.entries(defaultAppearance).map(([k,v])=>[k,Number.isInteger(value?.[k])&&value[k]>=0&&value[k]<avatarOptions[k].length?value[k]:v]))}
-export function drawPerson(ctx,{x,y,scale=1,appearance=defaultAppearance,phase=0,walking=false,seated=false,facing=1,back=false}){
- const a=normalizeAppearance(appearance),skin=avatarOptions.skin[a.skin],hair=avatarOptions.hairColor[a.hairColor],cloth=avatarOptions.color[a.color];
+export function drawPerson(ctx,{x,y,scale=1,appearance=defaultAppearance,phase=0,walking=false,seated=false,facing=1,back=false,fabric=null,fabricScale=24}){
+ const a=normalizeAppearance(appearance),skin=avatarOptions.skin[a.skin],hair=avatarOptions.hairColor[a.hairColor],baseCloth=avatarOptions.color[a.color];let cloth=baseCloth;if(fabric){const p=ctx.createPattern(fabric,'repeat');if(p){p.setTransform(new DOMMatrix().scale(fabricScale/fabric.width));cloth=p}}
  const gait=walking&&!seated?Math.sin(phase):0,bob=walking&&!seated?Math.abs(Math.sin(phase))*2:0;
  ctx.save();ctx.translate(x,y);ctx.scale(scale*facing,scale);ctx.lineCap='round';ctx.lineJoin='round';
  const ellipse=(x,y,rx,ry,fill)=>{ctx.fillStyle=fill;ctx.beginPath();ctx.ellipse(x,y,rx,ry,0,0,Math.PI*2);ctx.fill()};
@@ -20,8 +21,8 @@ export function drawPerson(ctx,{x,y,scale=1,appearance=defaultAppearance,phase=0
  const hip=seated?-42:-78,torso=seated?41:0,legColor=a.outfit===1?'#526b81':a.outfit===3?'#3c4248':'#424749';
  // Opposite knee/foot travel, with a planted heel and a lifted returning foot.
  for(const side of [-1,1]){const stride=gait*side;const hx=side*8;
-  const knee=seated?[hx+17,-26]:[hx+stride*8,-41-Math.max(0,stride)*4];
-  const foot=seated?[hx+22,-5]:[hx+stride*14,-6-Math.max(0,-stride)*7];
+  const knee=seated?[hx+24,side<0?-34:-28]:[hx+stride*8,-41-Math.max(0,stride)*4];
+  const foot=seated?[hx+25,side<0?-8:-1]:[hx+stride*14,-6-Math.max(0,-stride)*7];
   limb([[hx,hip],knee,foot],legColor,12);
   ellipse(foot[0]+3,foot[1]+3,10,5,'#eee9dc');ellipse(foot[0]+4,foot[1]+1,9,4,a.outfit===3?'#39332e':'#faf8ef');
  }
@@ -29,23 +30,29 @@ export function drawPerson(ctx,{x,y,scale=1,appearance=defaultAppearance,phase=0
  if([2,3].includes(a.hair))shape([[-18,-173+torso],[-22,-114+torso],[20,-111+torso],[18,-172+torso]],hair);
  if(a.hair===3)ellipse(back?-23:20,-148+torso,9,24,hair);
  const shoulder=-133+torso;
- for(const side of [-1,1]){const swing=-gait*side,hand=seated?[side*14+7,-75]:[side*23+swing*10,-85-Math.max(0,swing)*5];
-  limb([[side*17,shoulder],[side*23+swing*5,-108+torso],hand],cloth,11);ellipse(hand[0],hand[1]+3,5,7,skin);
+ for(const side of [-1,1]){const swing=-gait*side,hand=seated?[side*9+10,-48]:[side*23+swing*10,-85-Math.max(0,swing)*5];
+  limb([[side*17,shoulder],[seated?side*20:side*23+swing*5,seated?-67:-108+torso],hand],cloth,11);ellipse(hand[0],hand[1]+3,5,7,skin);
  }
  shape([[-16,-138+torso],[16,-138+torso],[21,-85+torso],[-21,-85+torso]],cloth,'#172a2522');
- if(a.outfit===4)shape([[-13,-117+torso],[13,-117+torso],[31,-65+torso],[-29,-65+torso]],cloth);
+ if(a.outfit===4)shape(seated?[[-17,-58],[17,-58],[40,-27],[8,-24],[-19,-32]]:[[-13,-117],[13,-117],[31,-65],[-29,-65]],cloth);
  // Subtle seams and highlights give the outfit a tailored silhouette.
  limb([[-13,-129+torso],[-10,-92+torso]],'#ffffff20',2);
  if(a.outfit===0){shape([[-8,-140+torso],[0,-127+torso],[8,-140+torso]],'#fff8e7');limb([[0,-126+torso],[0,-90+torso]],'#fff9ec66',1);for(const y of [-119,-109,-99])ellipse(1,y+torso,1,1,'#dccbab')}
  if(a.outfit===1){limb([[-7,-134+torso],[0,-128+torso],[7,-134+torso]],'#d8e0dd',2);limb([[-10,-102+torso],[10,-102+torso]],'#17352b55',2);limb([[-4,-127+torso],[-4,-115+torso]],'#ece8dc',1);limb([[4,-127+torso],[4,-115+torso]],'#ece8dc',1)}
  if(a.outfit===2)for(const y of [-125,-119,-113,-107])limb([[-14,y+torso],[14,y+torso]],'#ffffff16',1);
- if(a.outfit===3){shape([[-8,-139+torso],[8,-139+torso],[7,-89+torso],[-6,-89+torso]],'#eee8dc');shape([[-15,-140+torso],[-4,-128+torso],[-9,-117+torso],[-2,-110+torso],[-17,-90+torso]],cloth);shape([[14,-140+torso],[4,-128+torso],[9,-117+torso],[3,-110+torso],[18,-90+torso]],cloth);ellipse(10,-111+torso,1.4,1.4,'#d6ba7f')}
+ if(a.outfit===3){shape([[-8,-139+torso],[8,-139+torso],[7,-89+torso],[-6,-89+torso]],'#eee8dc');shape([[-15,-140+torso],[-4,-128+torso],[-9,-117+torso],[-2,-110+torso],[-17,-90+torso]],baseCloth);shape([[14,-140+torso],[4,-128+torso],[9,-117+torso],[3,-110+torso],[18,-90+torso]],baseCloth);ellipse(10,-111+torso,1.4,1.4,'#d6ba7f')}
  limb([[0,-143+torso],[0,-136+torso]],skin,10);
  const hy=-159+torso;ellipse(0,hy,17,22,skin);ellipse(-17,hy+1,3,5,skin);ellipse(17,hy+1,3,5,skin);
  if(!back){
-  ellipse(-6,hy+1,1.6,2,'#3d302a');ellipse(7,hy+1,1.6,2,'#3d302a');
-  limb([[-9,hy-5],[-4,hy-6]],hair,1.5);limb([[4,hy-6],[10,hy-5]],hair,1.5);
-  limb([[1,hy+4],[2,hy+8]],'#ae765b',1);limb([[-3,hy+13],[1,hy+14],[5,hy+12]],'#a16050',1.4);
+  if(a.expression===1){limb([[-9,hy+2],[-6,hy],[-3,hy+2]],'#3d302a',1.6);limb([[4,hy+2],[7,hy],[10,hy+2]],'#3d302a',1.6)}
+  else{ellipse(-6,hy+1,1.6,a.expression===4?3:2,'#3d302a');if(a.expression===5)limb([[4,hy+1],[7,hy+3],[10,hy+1]],'#3d302a',1.6);else ellipse(7,hy+1,1.6,a.expression===4?3:2,'#3d302a')}
+  limb([[-9,hy-5],[-4,hy-(a.expression===3?8:6)]],hair,1.5);limb([[4,hy-(a.expression===4?9:6)],[10,hy-5]],hair,1.5);
+  limb([[1,hy+4],[2,hy+8]],'#ae765b',1);
+  if(a.expression===1){ellipse(1,hy+13,6,4,'#914b43');limb([[-3,hy+11],[5,hy+11]],'#fff3dc',1.5)}
+  else if(a.expression===4)ellipse(1,hy+13,3,4,'#914b43');
+  else if(a.expression===2)limb([[-3,hy+13],[5,hy+13]],'#a16050',1.4);
+  else if(a.expression===3)limb([[-3,hy+13],[1,hy+12],[5,hy+13]],'#a16050',1.4);
+  else limb([[-3,hy+13],[1,hy+14],[5,hy+12]],'#a16050',1.4);
   ellipse(-10,hy+8,3,1.5,'#d48f7d44');ellipse(11,hy+8,3,1.5,'#d48f7d44');
  }
  if(back){ellipse(0,hy-2,18,23,hair)}
