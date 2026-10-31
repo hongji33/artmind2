@@ -10,11 +10,10 @@ for(const y of [.5,2.5])tSlots.push(slot(0,y,'left'));
 for(const y of [3.5,5.5,7.5,8.5])tSlots.push(slot(4,y,'left'));
 const extraSlots=[...Array.from({length:9},(_,i)=>slot(i+1.5,0,'back')),...Array.from({length:7},(_,i)=>slot(0,i+1.5,'left'))];
 export const rooms=[
- {name:'중앙 로비',spawn:{x:6,y:8.6},slots:[],doors:[{x:2,y:0,to:1,label:'U자 전시관'},{x:10,y:0,to:2,label:'T자 전시관'},{x:6,y:0,to:3,label:'특별 전시관'},{x:0,y:3,to:4,label:'미술 체험실',axis:'y'}],props:[{kind:'sculpture',x:6,y:4},{kind:'bench',x:3,y:6},{kind:'bench',x:9,y:6},{kind:'plant',x:1,y:8},{kind:'plant',x:11,y:8},{kind:'floorlamp',x:3,y:4.7}]},
+ {name:'중앙 로비',spawn:{x:6,y:8.6},slots:[],doors:[{x:2,y:0,to:1,label:'U자 전시관'},{x:10,y:0,to:2,label:'T자 전시관'},{x:6,y:0,to:3,label:'특별 전시관'}],props:[{kind:'sculpture',x:6,y:4},{kind:'bench',x:3,y:6},{kind:'bench',x:9,y:6},{kind:'plant',x:1,y:8},{kind:'plant',x:11,y:8},{kind:'floorlamp',x:3,y:4.7}]},
  {name:'U자 전시관',spawn:{x:6,y:8.6},slots:uSlots,doors:[{x:6,y:10,to:0,label:'중앙 로비'}],props:[{kind:'plant',x:2,y:4},{kind:'plant',x:10,y:4},{kind:'bench',x:3,y:8},{kind:'floorlamp',x:2,y:7}]},
  {name:'T자 전시관',spawn:{x:6,y:8.6},slots:tSlots,doors:[{x:6,y:10,to:0,label:'중앙 로비'}],props:[{kind:'plant',x:10.5,y:2},{kind:'bench',x:6,y:5.5},{kind:'floorlamp',x:6.8,y:6.7}]},
- {name:'특별 전시관',spawn:{x:6,y:8.6},slots:extraSlots,doors:[{x:6,y:10,to:0,label:'중앙 로비'}],props:[{kind:'sculpture',x:6,y:4},{kind:'plant',x:10,y:2},{kind:'bench',x:3,y:7},{kind:'floorlamp',x:9,y:7}]},
- {name:'미술 체험실',spawn:{x:6,y:8.6},slots:[],doors:[{x:6,y:10,to:0,label:'중앙 로비'}],props:[{kind:'studio',zone:'atelier',x:2.7,y:2.3},{kind:'studio',zone:'light',x:8.7,y:2.3},{kind:'studio',zone:'digital',x:2.7,y:6},{kind:'studio',zone:'culture',x:8.7,y:6},{kind:'worktable',x:6,y:4.3},{kind:'bench',x:6,y:7.1},{kind:'plant',x:1,y:8.5},{kind:'plant',x:11,y:8.5},{kind:'floorlamp',x:1.3,y:4.2},{kind:'floorlamp',x:10.7,y:4.2}]}
+ {name:'특별 전시관',spawn:{x:6,y:8.6},slots:extraSlots,doors:[{x:6,y:10,to:0,label:'중앙 로비'}],props:[{kind:'sculpture',x:6,y:4},{kind:'plant',x:10,y:2},{kind:'bench',x:3,y:7},{kind:'floorlamp',x:9,y:7}]}
 ];
 export function floorAt(id,x,y){
  if(x<0||y<0||x>=WIDTH||y>=HEIGHT)return false;
@@ -24,7 +23,7 @@ export function floorAt(id,x,y){
 }
 export function canStand(id,x,y,r=.23){
  for(const [dx,dy] of [[-r,-r],[r,-r],[-r,r],[r,r]])if(!floorAt(id,x+dx,y+dy))return false;
- return !rooms[id].props.some(p=>Math.abs(x-p.x)<(p.kind==='worktable'?1:p.kind==='studio'?.85:p.kind==='bench'?.8:.4)+r&&Math.abs(y-p.y)<.35+r);
+ return !rooms[id].props.some(p=>Math.abs(x-p.x)<(p.kind==='bench'?.8:.4)+r&&Math.abs(y-p.y)<.35+r);
 }
 export function walls(id){
  const result=[];
