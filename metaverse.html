@@ -165,7 +165,7 @@ for(const b of document.querySelectorAll('[data-move]')){
 }document.querySelector('[data-action="interact"]').onclick=interact;
 $('prevPage').onclick=()=>{specialPage=Math.max(0,specialPage-1);changeRoom(3)};
 $('nextPage').onclick=()=>{specialPage=Math.min(Math.max(0,Math.ceil((exhibits.length-30)/16)-1),specialPage+1);changeRoom(3)};
-async function load(){if(signedOut||!user||!member){text('status','학급 승인을 기다리고 있습니다.');return}text('status','우리 반 작품을 불러오는 중…');const requestEpoch=authEpoch;try{const loadingUid=user.uid,loadingClass=member.classId,epoch=authEpoch;const q=query(collection(db,'artmind2_exhibits'),where('classId','==',member.classId),limit(100));const snap=await getDocs(q);if(epoch!==authEpoch||signedOut||user?.uid!==loadingUid||member?.classId!==loadingClass)return;exhibits=snap.docs.map(d=>({...d.data(),id:d.id})).sort((a,b)=>(b.updatedAt?.seconds||0)-(a.updatedAt?.seconds||0)).slice(0,100);specialPage=Math.min(specialPage,Math.max(0,Math.ceil((exhibits.length-30)/16)-1));text('roomTitle',`✦ ${member.classId} 우리 반 마음의 미술관`);text('status',exhibits.length?'작품에 가까이 다가가 감상해 보세요.':'아직 온라인 전시가 없습니다. 감상 웹앱에서 먼저 작품을 게시해 주세요.');text('count',`현재 전시 ${exhibits.length}점 · U자 16점 · T자 14점 · 나머지는 특별전`);changeRoom(currentRoom);const id=new URLSearchParams(location.search).get('exhibit');if(id&&exhibits.some(x=>x.id===id)){const ix=exhibits.findIndex(x=>x.id===id),target=roomForIndex(ix);specialPage=target.page;changeRoom(target.id);openExhibit(id)}}catch(e){if(signedOut||requestEpoch!==authEpoch)return;text('status','전시 불러오기 실패: '+e.message)}}
+async function load(){if(signedOut||!user||!member){text('status','반 비밀번호로 로그인해 주세요.');return}text('status','우리 반 작품을 불러오는 중…');const requestEpoch=authEpoch;try{const loadingUid=user.uid,loadingClass=member.classId,epoch=authEpoch;const q=query(collection(db,'artmind2_exhibits'),where('classId','==',member.classId),limit(100));const snap=await getDocs(q);if(epoch!==authEpoch||signedOut||user?.uid!==loadingUid||member?.classId!==loadingClass)return;exhibits=snap.docs.map(d=>({...d.data(),id:d.id})).sort((a,b)=>(b.updatedAt?.seconds||0)-(a.updatedAt?.seconds||0)).slice(0,100);specialPage=Math.min(specialPage,Math.max(0,Math.ceil((exhibits.length-30)/16)-1));text('roomTitle',`✦ ${member.classId} 우리 반 마음의 미술관`);text('status',exhibits.length?'작품에 가까이 다가가 감상해 보세요.':'아직 온라인 전시가 없습니다. 감상 웹앱에서 먼저 작품을 게시해 주세요.');text('count',`현재 전시 ${exhibits.length}점 · U자 16점 · T자 14점 · 나머지는 특별전`);changeRoom(currentRoom);const id=new URLSearchParams(location.search).get('exhibit');if(id&&exhibits.some(x=>x.id===id)){const ix=exhibits.findIndex(x=>x.id===id),target=roomForIndex(ix);specialPage=target.page;changeRoom(target.id);openExhibit(id)}}catch(e){if(signedOut||requestEpoch!==authEpoch)return;text('status','전시 불러오기 실패: '+e.message)}}
 async function openExhibit(id){if(signedOut||!user||!member?.classId)return;const d=exhibits.find(x=>x.id===id);if(!d||d.classId!==member.classId)return;clearPointer();stop();selected=d;text('modalTitle',d.title||'제목 없는 전시');text('modalInfo',`${d.nickname||'친구'} · ${d.work?.artist||''} / ${d.work?.title||''}`);const art=$('modalArt');art.replaceChildren();const title=document.createElement('div');title.textContent=d.work?.title||'마음의 작품';const small=document.createElement('small');small.textContent=d.work?.artist||'';title.append(small);art.append(title);const actual=artworkURL(d);if(actual){const img=document.createElement('img');img.src=actual;img.alt=`${d.work?.artist||''}의 ${d.work?.title||''}`;img.style.cssText='width:100%;max-height:360px;object-fit:contain;display:block';img.onerror=()=>img.remove();art.prepend(img)}const hue=(d.title||'').split('').reduce((a,c)=>a+c.charCodeAt(0),0)%360;art.style.background=`linear-gradient(135deg,hsl(${hue},27%,75%),hsl(${(hue+50)%360},22%,48%))`;text('modalStory',d.story||'감상문이 없습니다.');text('modalStatus','');updateViewedButton();$('overlay').classList.add('show');$('close').focus();$('like').disabled=false;$('send').disabled=false;text('like','♡ 공감해요');await Promise.all([loadComments(id),loadLikes(id)])}
 function updateProgress(){text('progress',`감상 완료 ${exhibits.filter(d=>viewed.has(d.id)).length} / ${exhibits.length}점`)}
 function updateViewedButton(){const yes=!!selected&&viewed.has(selected.id);text('markViewed',yes?'✓ 감상 완료 · 표시 취소':'감상 완료');$('markViewed').setAttribute('aria-pressed',String(yes))}
@@ -195,32 +195,30 @@ function clearPersonalAvatar(){
  for(const [field,value] of Object.entries(appearance)){const input=$('appearance-'+field);if(input)input.value=value}
  $('avatarUpload').value='';$('fabricUpload').value='';$('fabricScale').value='24';$('fabricRemove').click();$('fabricClear').click();appearancePreview();
 }
+function entryProof(){try{return JSON.parse(sessionStorage.getItem('artmind2-class-entry-v1')||'null')}catch{return null}}
 async function handleAuth(u){
- const epoch=++authEpoch;user=signedOut?null:u;clearStudentView();authControls();
- if(!user){clearPersonalAvatar();text('identity','로그아웃 상태');text('roomTitle','학생 로그인 후 감상할 수 있습니다.');text('status','학생 로그인 버튼을 눌러 주세요.');text('authMessage','익명 로그인은 다시 로그인할 때 학생 ID가 바뀌어 학급 재승인이 필요할 수 있습니다.');return}
+ const epoch=++authEpoch;user=!signedOut&&u&&entryProof()?.uid===u.uid?u:null;clearStudentView();authControls();
+ if(!user){clearPersonalAvatar();text('identity','로그아웃 상태');text('roomTitle','학생 로그인 후 감상할 수 있습니다.');text('status','학생 로그인 버튼을 눌러 주세요.');text('authMessage','학생 로그인에서 학반·닉네임·반 비밀번호를 입력해 주세요.');return}
  let owner=null;try{owner=localStorage.getItem('artmind2-profile-owner-v1')}catch{}if(owner!==u.uid){clearPersonalAvatar();try{localStorage.setItem('artmind2-profile-owner-v1',u.uid)}catch{}}
- text('identity','학생 정보 확인 중…');text('authMessage','익명 계정입니다. 로그아웃하면 같은 승인 ID로 돌아오지 못할 수 있습니다.');
+ text('identity','학생 정보 확인 중…');text('authMessage','반 비밀번호로 입장한 학생입니다.');
  try{
   const snap=await getDoc(doc(db,'artmind2_members',u.uid));if(epoch!==authEpoch||signedOut||auth.currentUser?.uid!==u.uid)return;
   member=snap.exists()?snap.data():null;if(!member?.classId)member=null;viewedKey=progressKey(u.uid,member?.classId);try{viewed=readViewed(localStorage,viewedKey)}catch{viewed=new Set()}
-  updateProgress();text('identity',member?`${member.nickname||'학생'} · ${member.classId}`:`승인 대기 · 학생 ID: ${u.uid}`);authControls();$('send').disabled=!member;
-  if(!member){text('roomTitle','학급 승인 후 입장 가능');text('status','위 학생 ID를 선생님께 전달해 학급 승인을 받아 주세요.');draw();return}
+  updateProgress();text('identity',member?`${member.nickname||'학생'} · ${member.classId}`:`입장 확인 필요`);authControls();$('send').disabled=!member;
+  if(!member){text('roomTitle','반 비밀번호 로그인 후 입장 가능');text('status','학생 로그인에서 학반·닉네임·반 비밀번호를 입력해 주세요.');draw();return}
   await load();
  }catch(e){if(epoch!==authEpoch||signedOut)return;text('identity','학생 정보 확인 실패');text('status','회원 확인 실패: '+e.message)}
 }
-async function loginStudent(){
- if(authBusy)return;authBusy=true;setSignedOut(false);authControls();text('authMessage','익명 학생 계정으로 로그인 중입니다.');
- try{if(auth.currentUser)await handleAuth(auth.currentUser);else await signInAnonymously(auth)}catch(e){text('authMessage','로그인하지 못했습니다: '+e.message)}finally{authBusy=false;authControls()}
-}
+function loginStudent(){location.assign(new URL('./index.html',location.href).href)}
 $('login').onclick=loginStudent;
 $('logout').onclick=async()=>{
- if(authBusy||!user)return;
- if(!window.confirm('익명 계정에서 로그아웃하면 기존 학생 ID로 다시 로그인하지 못하고, 선생님의 학급 승인을 다시 받아야 할 수 있습니다. 로그아웃할까요?'))return;
- authBusy=true;setSignedOut(true);++authEpoch;user=null;clearStudentView();authControls();text('identity','로그아웃 처리 중…');
- try{await signOut(auth);await handleAuth(null);text('authMessage','로그아웃했습니다. 다음 학생은 학생 로그인 버튼을 눌러 주세요.')}catch(e){setSignedOut(false);await handleAuth(auth.currentUser);text('authMessage','로그아웃하지 못했습니다: '+e.message)}finally{authBusy=false;authControls()}
+ if(authBusy||!user)return;const previousProof=entryProof();
+ if(!window.confirm('로그아웃할까요? 다시 입장할 때 학반·닉네임·반 비밀번호가 필요합니다.'))return;
+ authBusy=true;setSignedOut(true);sessionStorage.removeItem('artmind2-class-entry-v1');sessionStorage.removeItem('artmind2-working-draft-v2');sessionStorage.removeItem('artmind2-working-identity-v2');++authEpoch;user=null;clearStudentView();authControls();text('identity','로그아웃 처리 중…');
+ try{await signOut(auth);await handleAuth(null);text('authMessage','로그아웃했습니다. 다음 학생은 학생 로그인 버튼을 눌러 주세요.')}catch(e){if(previousProof)sessionStorage.setItem('artmind2-class-entry-v1',JSON.stringify(previousProof));setSignedOut(false);await handleAuth(auth.currentUser);text('authMessage','로그아웃하지 못했습니다: '+e.message)}finally{authBusy=false;authControls()}
 };
 onAuthStateChanged(auth,handleAuth);
-window.addEventListener('storage',e=>{if(e.key==='artmind-gallery-signed-out-v1'&&e.newValue==='1'){signedOut=true;handleAuth(null)}});
-if(!signedOut)signInAnonymously(auth).catch(e=>{text('authMessage','Firebase 익명 로그인 실패: '+e.message);authControls()});else handleAuth(null);
+window.addEventListener('storage',e=>{if(e.key==='artmind-gallery-signed-out-v1'&&e.newValue==='1'){signedOut=true;sessionStorage.removeItem('artmind2-class-entry-v1');handleAuth(null)}});
+handleAuth(auth.currentUser);
 window.addEventListener('resize',()=>{size();draw()});size();draw();
 </script></body></html>

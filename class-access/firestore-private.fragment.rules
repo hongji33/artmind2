@@ -1,0 +1,10 @@
+// Add INSIDE the existing match /databases/{database}/documents block.
+// Existing broad allow rules must not also allow access to these paths.
+match /artmind2_class_access/{classId} { allow read, write: if false; }
+match /artmind2_class_rate_limits/{attemptId} { allow read, write: if false; }
+// Student browsers must not create/update/delete artmind2_members themselves.
+// Keep class-scoped exhibit/like/comment rules. Admin SDK/console bypass these denies.
+match /artmind2_members/{uid} {
+ allow read: if request.auth != null && request.auth.uid == uid;
+ allow write: if false;
+}

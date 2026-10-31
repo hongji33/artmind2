@@ -1,0 +1,5 @@
+from firebase_mock import FIREBASE_MOCK
+MOCK=FIREBASE_MOCK.replace('await window.authCallback(window.mockAuth.currentUser)}','await window.authCallback(window.mockAuth.currentUser);return {user:window.mockAuth.currentUser}}')
+MOCK=MOCK.replace("uid:'student',isAnonymous:true","uid:sessionStorage.getItem('mock-uid')||'student',isAnonymous:true").replace('return {user:window.mockAuth.currentUser}',"sessionStorage.setItem('mock-uid',window.mockAuth.currentUser.uid);return {user:window.mockAuth.currentUser}")
+MOCK=MOCK.replace("data:()=>({classId:'1-1',nickname:'테스트'})", "data:()=>JSON.parse(sessionStorage.getItem('mock-member')||'null')")
+MOCK+='''export const getFunctions=()=>({});export const httpsCallable=()=>async data=>{window.joinCalls=(window.joinCalls||0)+1;if(data.password!=='test-class-password'){const e=new Error('wrong');e.code='functions/permission-denied';throw e}if(window.serverDown)throw Error('unavailable');sessionStorage.setItem('mock-member',JSON.stringify({classId:data.classId,nickname:data.nickname}));return {data:{classId:data.classId,nickname:data.nickname}}};'''
