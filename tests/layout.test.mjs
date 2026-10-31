@@ -36,6 +36,10 @@ test('viewed records are isolated by account and classroom and tolerate invalid 
  db.set(key,'bad json');assert.equal(readViewed(storage,key).size,0);assert.equal(progressKey(null,'1-1'),null);
  assert.equal(saveViewed({setItem(){throw Error('quota')}},key,new Set()),false);
 });
-test('studio uses the supplied HTTPS activity without gallery data in its URL',async()=>{
- const {studioActivities}=await import('../personal-gallery.mjs');assert.equal(studioActivities[0].url,'https://hongji33.github.io/arthistory/');assert.equal(new URL(studioActivities[0].url).search,'');assert.equal(rooms[4].name,'미술 체험실');assert.ok(rooms[0].doors.some(d=>d.to===4));
+test('all artclass menus have exact URLs, valid zones and approachable stations',async()=>{
+ const {studioActivities,studioZones}=await import('../personal-gallery.mjs');assert.equal(studioActivities.length,12);assert.equal(studioZones.length,4);
+ assert.equal(studioActivities.find(a=>a.id==='arthistory').url,'https://hongji33.github.io/arthistory/');
+ for(const a of studioActivities){const url=new URL(a.url);assert.equal(url.origin,'https://hongji33.github.io');assert.ok(studioZones.some(z=>z.id===a.zone));assert.ok([...url.searchParams.keys()].every(k=>['tab','sub'].includes(k)))}
+ for(const z of studioZones){assert.ok(studioActivities.some(a=>a.zone===z.id));const p=rooms[4].props.find(p=>p.zone===z.id);assert.ok(p);assert.ok(canStand(4,p.x,p.y+1))}
+ assert.equal(rooms[4].name,'미술 체험실');assert.ok(rooms[0].doors.some(d=>d.to===4));
 });
