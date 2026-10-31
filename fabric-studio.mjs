@@ -19,7 +19,7 @@ export function initFabricStudio(onChange){
  $('fabricUpload').onchange=async e=>{
   const file=e.target.files?.[0];if(!file)return;const version=++revision;
   if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>2*1024*1024){status('2MB 이하 PNG/JPG/WebP 이미지를 선택해 주세요.');return}
-  try{const image=await createImageBitmap(file,{resizeWidth:256,resizeQuality:'high'});if(version!==revision){image.close();return}blank();const fit=Math.min(pad.width/image.width,pad.height/image.height);ctx.drawImage(image,(pad.width-image.width*fit)/2,(pad.height-image.height*fit)/2,image.width*fit,image.height*fit);image.close();apply()}
+  try{const image=await createImageBitmap(file,{resizeWidth:256,resizeHeight:256,resizeQuality:'high'});if(version!==revision){image.close();return}blank();const fit=Math.min(pad.width/image.width,pad.height/image.height);ctx.drawImage(image,(pad.width-image.width*fit)/2,(pad.height-image.height*fit)/2,image.width*fit,image.height*fit);image.close();apply()}
   catch{if(version===revision)status('원단 이미지를 읽지 못했어요. 다른 파일을 선택해 주세요.')}finally{e.target.value=''}
  };
  try{const saved=JSON.parse(localStorage.getItem('artmind-fabric-v1')||'null');if(saved&&typeof saved.data==='string'&&saved.data.startsWith('data:image/png;base64,')&&saved.data.length<200000){const version=revision,img=new Image();img.onload=()=>{if(version!==revision)return;blank();ctx.drawImage(img,0,0,pad.width,pad.height);$('fabricScale').value=Math.max(12,Math.min(48,Number(saved.scale)||24));apply(false);status('이 기기에 저장된 내 원단을 불러왔어요.')};img.src=saved.data}}catch{}
