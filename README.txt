@@ -1,8 +1,1 @@
-마음의 미술관 - 아이소메트릭 메타버스 갤러리
-
-GitHub hongji33/artmind2 저장소의 최상위 폴더에 index.html, metaverse.html, artwork-map.js 세 파일을 모두 올리세요.
-기존 Firebase 프로젝트 artmind2-2edd4와 승인된 학급을 사용합니다. Firestore 규칙 변경은 필요하지 않습니다.
-학생은 같은 브라우저에서 기존 감상 앱과 메타버스를 열어야 익명 로그인 UID가 유지됩니다.
-작품은 최대 17개가 방에 배치됩니다. 교실 인원이 많으면 추후 여러 전시실을 추가해야 합니다.
-그림 이미지는 기존 작품 데이터에 수록된 출처 링크/내장 이미지를 활용하며, 일부 출처 서버에서 차단될 수 있습니다.
-실제 Firebase 온라인 저장 및 크롬북 기기 테스트는 진행되지 않았습니다.
+GitHub hongji33/artmind2 저장소 최상위에 metaverse.html, museum-bg.png, artwork-map.js를 업로드하세요. 기존 index.html은 변경하지 마세요. 이 버전은 AI 미술관 배경과 전시실 벽 색상/조명 그래픽을 개선한 버전입니다. U/T 형태의 실제 벽 충돌 및 다중 사용자 동기화는 미구현입니다.
