@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {rooms,floorAt,canStand,walls,nearDoor,exhibitionRange,roomForIndex} from '../gallery-layout.mjs';
-for(let id=0;id<4;id++)test(`room ${id}: floor, walls, reachable exhibits and doors`,()=>{
+for(let id=0;id<rooms.length;id++)test(`room ${id}: floor, walls, reachable exhibits and doors`,()=>{
  const r=rooms[id];assert.ok(canStand(id,r.spawn.x,r.spawn.y));
  // Flood fill a .25-unit grid, respecting avatar clearance and furniture.
  const visited=new Set(),queue=[[24,35]];const key=(x,y)=>`${x},${y}`;
@@ -25,4 +25,17 @@ test('malformed avatar choices fall back to valid defaults',async()=>{
  assert.deepEqual(normalizeAppearance(null),defaultAppearance);
  assert.deepEqual(normalizeAppearance({hair:99,skin:-1,outfit:'4',hairColor:NaN,color:Infinity}),defaultAppearance);
  assert.equal(normalizeAppearance({hair:5,outfit:4}).hair,5);
+});
+
+
+test('viewed records are isolated by account and classroom and tolerate invalid storage',async()=>{
+ const {progressKey,readViewed,saveViewed}=await import('../personal-gallery.mjs');
+ const db=new Map(),storage={getItem:k=>db.get(k),setItem:(k,v)=>db.set(k,v)};
+ const key=progressKey('student-a','1-1');assert.ok(saveViewed(storage,key,new Set(['work1'])));
+ assert.deepEqual([...readViewed(storage,key)],['work1']);assert.equal(readViewed(storage,progressKey('student-b','1-1')).size,0);assert.equal(readViewed(storage,progressKey('student-a','1-2')).size,0);
+ db.set(key,'bad json');assert.equal(readViewed(storage,key).size,0);assert.equal(progressKey(null,'1-1'),null);
+ assert.equal(saveViewed({setItem(){throw Error('quota')}},key,new Set()),false);
+});
+test('studio uses the supplied HTTPS activity without gallery data in its URL',async()=>{
+ const {studioActivities}=await import('../personal-gallery.mjs');assert.equal(studioActivities[0].url,'https://hongji33.github.io/arthistory/');assert.equal(new URL(studioActivities[0].url).search,'');assert.equal(rooms[4].name,'미술 체험실');assert.ok(rooms[0].doors.some(d=>d.to===4));
 });
