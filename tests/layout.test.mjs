@@ -1,0 +1,14 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {rooms,floorAt,canStand,walls,nearDoor,exhibitionRange,roomForIndex} from '../gallery-layout.mjs';
+for(let id=0;id<4;id++)test(`room ${id}: floor, walls, reachable exhibits and doors`,()=>{
+ const r=rooms[id];assert.ok(canStand(id,r.spawn.x,r.spawn.y));
+ // Flood fill a .25-unit grid, respecting avatar clearance and furniture.
+ const visited=new Set(),queue=[[24,35]];const key=(x,y)=>`${x},${y}`;
+ for(let i=0;i<queue.length;i++){const [x,y]=queue[i];for(const [dx,dy]of [[1,0],[-1,0],[0,1],[0,-1]]){const nx=x+dx,ny=y+dy,k=key(nx,ny);if(!visited.has(k)&&canStand(id,nx/4,ny/4)){visited.add(k);queue.push([nx,ny])}}}
+ for(const s of r.slots){assert.ok(floorAt(id,s.px,s.py));assert.ok([...visited].some(k=>{const [x,y]=k.split(',').map(Number);return Math.hypot(x/4-s.px,y/4-s.py)<.6}),`unreachable slot ${JSON.stringify(s)}`);assert.ok(walls(id).some(w=>w.side===s.side&&(s.side==='back'?w.ay===s.y&&s.x>=w.ax&&s.x<=w.bx:w.ax===s.x&&s.y>=w.ay&&s.y<=w.by)), 'frame must be on a wall');}
+ for(const d of r.doors)assert.ok([...visited].some(k=>{const[x,y]=k.split(',').map(Number);return nearDoor(id,x/4,y/4)===d}));
+ assert.equal(canStand(id,-.1,2),false);
+});
+test('U/T voids and corners block walking',()=>{assert.equal(canStand(1,6,3),false);assert.equal(canStand(1,3.9,3),false);assert.equal(canStand(2,2,6),false);assert.equal(canStand(2,4.1,5),false);assert.equal(nearDoor(0,6,5),undefined)});
+test('30 unique exhibits plus every overflow page and deep link',()=>{assert.equal(rooms[1].slots.length,16);assert.equal(rooms[2].slots.length,14);const indexes=[];for(let id=1;id<4;id++)for(let p=0;p<(id===3?5:1);p++){const[a,b]=exhibitionRange(id,p);for(let n=a;n<b&&n<100;n++){indexes.push(n);assert.deepEqual(roomForIndex(n),{id,page:p})}}assert.deepEqual(indexes,Array.from({length:100},(_,i)=>i))});
