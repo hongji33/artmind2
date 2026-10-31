@@ -7,7 +7,7 @@ class Quiet(SimpleHTTPRequestHandler):
 server=ThreadingHTTPServer(('127.0.0.1',8765),Quiet)
 threading.Thread(target=server.serve_forever,daemon=True).start()
 Path('work').mkdir(exist_ok=True)
-source=Path('metaverse.html').read_text().replace('size();draw();\n</script>', '''size();draw();window.__test={move,changeRoom,interact,draw,getPlayer:()=>({...player}),setPlayer:(x,y)=>{player.x=x;player.y=y;draw()},getRoom:()=>currentRoom,getExhibits:()=>roomExhibits(),getKeys:()=>keys.size,getAppearance:()=>({...appearance}),getMotion:()=>({walkPhase,isWalking,seated:!!seated}),benchPoint:(x,y)=>iso(x,y,.55),getScale:()=>scale};\n</script>''')
+source=Path('metaverse.html').read_text().replace('size();draw();\n</script>', '''size();draw();window.__test={move,changeRoom,interact,draw,getPlayer:()=>({...player}),setPlayer:(x,y)=>{player.x=x;player.y=y;draw()},getRoom:()=>currentRoom,getExhibits:()=>roomExhibits(),getKeys:()=>keys.size,getAppearance:()=>({...appearance}),getMotion:()=>({walkPhase,isWalking,seated:!!seated}),benchPoint:(x,y)=>iso(x,y,.55),getScale:()=>scale,artPoint:id=>{const h=hitRegions.find(h=>h.d.id===id);return {x:h.x,y:h.y}},doorPoint:i=>{const d=rooms[currentRoom].doors[i];return iso(d.x,d.y,1.2)}};\n</script>''')
 mock='''window.calls=[];export const initializeApp=()=>({});export const getAuth=()=>window.mockAuth={currentUser:{uid:'student'}};export const onAuthStateChanged=(a,cb)=>window.authCallback=cb;export const signInAnonymously=async()=>{await window.authCallback(window.mockAuth.currentUser)};export const getFirestore=()=>({});export const doc=(db,...p)=>p.join('/');export const collection=doc;export const query=(path,...filters)=>({path,filters});export const where=(...x)=>x;export const limit=x=>x;export const serverTimestamp=()=>123;export const getDoc=async()=>({exists:()=>window.approved!==false,data:()=>({classId:'1-1',nickname:'테스트'})});export const getDocs=async q=>{window.calls.push(['read',q]);let a=[];if(q.path==='artmind2_exhibits')a=Array.from({length:100},(_,i)=>({id:'work'+i,data:()=>({classId:'1-1',nickname:'학생'+i,title:'마음 '+i,story:'감상문 '+i,work:{artist:'윤두서',title:'자화상'},updatedAt:{seconds:100-i}})}));if(q.path.endsWith('/comments'))a=[{id:'c1',data:()=>({nickname:'친구',text:'멋진 감상',createdAt:{seconds:1}})}];return {docs:a,size:a.length}};export const setDoc=async(...x)=>window.calls.push(['like',...x]);export const addDoc=async(...x)=>window.calls.push(['comment',...x]);'''
 async def main():
  async with async_playwright() as p:
@@ -20,6 +20,24 @@ async def main():
   assert not any(x[0] in ('like','comment') for x in await page.evaluate('window.calls'))
   await page.reload();await page.wait_for_function('window.__test && window.__test.getAppearance().hair===3');assert (await page.evaluate('__test.getAppearance()'))['outfit']==4
   await page.click('[data-room="1"]');assert await page.evaluate('__test.getExhibits().length')==16
+  point=await page.evaluate('__test.artPoint("work0")');await page.locator('#scene').hover(position=point)
+  tip=page.locator('#artworkTooltip');assert await tip.is_visible()
+  assert await page.locator('#hoverTitle').inner_text()=='마음 0';assert await page.locator('#hoverNickname').inner_text()=='학생0';assert await page.locator('#hoverArtist').inner_text()=='윤두서';assert await page.locator('#hoverWork').inner_text()=='자화상'
+  assert await page.locator('#scene').evaluate("e=>e.style.cursor")=='pointer'
+  await page.screenshot(path='work/artwork-hover.png');assert await tip.is_visible()
+  await page.locator('header').hover();assert not await tip.is_visible()
+  await page.evaluate('''()=>{const d=__test.getExhibits()[0];d.title='<img src=x onerror="window.__unsafe=true">';d.nickname='<b>학생</b>'}''')
+  await page.locator('#scene').hover(position=point);assert await page.locator('#hoverNickname').inner_text()=='<b>학생</b>';assert await tip.locator('img,b').count()==0;assert not await page.evaluate('!!window.__unsafe')
+  await page.locator('header').hover();await page.evaluate('''()=>{const d=__test.getExhibits()[0];d.title='';d.nickname='';d.work={}}''')
+  await page.locator('#scene').hover(position=point);assert await page.locator('#hoverTitle').inner_text()=='제목 없는 전시';assert await page.locator('#hoverNickname').inner_text()=='친구';assert await page.locator('#hoverArtist').inner_text()=='작가 정보 없음';assert await page.locator('#hoverWork').inner_text()=='작품명 정보 없음'
+  await page.locator('header').hover();await page.evaluate('''()=>{const d=__test.getExhibits()[0];d.title='마음 0';d.nickname='학생0';d.work={artist:'윤두서',title:'자화상'}}''')
+  await page.locator('#scene').hover(position=point);await page.click('[data-room="0"]');assert not await tip.is_visible()
+  # All three lobby doors and every return door use the visible door polygon.
+  for index,target,x in [(0,1,2),(1,2,10),(2,3,6)]:
+   point=await page.evaluate(f'__test.doorPoint({index})');await page.locator('#scene').click(position=point);assert await page.evaluate('__test.getRoom()')==0
+   await page.evaluate(f'__test.setPlayer({x},.9)');await page.locator('#scene').click(position=point);assert await page.evaluate('__test.getRoom()')==target
+   await page.evaluate('__test.setPlayer(6,9.2)');point=await page.evaluate('__test.doorPoint(0)');await page.locator('#scene').click(position=point);assert await page.evaluate('__test.getRoom()')==0
+  await page.click('[data-room="1"]')
   await page.locator('#scene').focus();start=await page.evaluate('__test.getPlayer()');await page.keyboard.down('a');await page.wait_for_timeout(250);assert (await page.evaluate('__test.getMotion()'))['walkPhase']>0;await page.keyboard.up('a');assert not (await page.evaluate('__test.getMotion()'))['isWalking'];end=await page.evaluate('__test.getPlayer()');assert end['x']<start['x']
   await page.wait_for_timeout(100);assert await page.evaluate('__test.getPlayer()')==end
   await page.evaluate('__test.setPlayer(3.5,3);__test.move(4,0)');assert (await page.evaluate('__test.getPlayer()'))['x']<4;await page.evaluate('__test.move(4,0)');assert not (await page.evaluate('__test.getMotion()'))['isWalking']
@@ -51,5 +69,5 @@ async def main():
   Path('work/avatar-styles.png').write_bytes(base64.b64decode((await page.evaluate('window.__avatarSheet')).split(',')[1]))
   await page.emulate_media(reduced_motion='reduce');await page.reload();await page.wait_for_function('window.__test');assert await page.evaluate("matchMedia('(prefers-reduced-motion: reduce)').matches")
   assert not errors,errors
-  await browser.close();print(json.dumps({'browser':'Chromium','checks':['30 illustrated combinations render','reduced-motion mode loads','appearance persisted after reload','distance-driven gait and idle pose','near-only bench click seating','button and movement stand up','100 mock exhibits','U16/T14','held keyboard movement and stop','U wall collision','E modal','like and comment paths','door E to lobby','overflow pagination','approval missing clears works','768px and 390px responsive','no page errors'],'draw_timing':timing,'errors':errors},ensure_ascii=False,indent=2))
+  await browser.close();print(json.dumps({'browser':'Chromium','checks':['four-field artwork hover, missing metadata and hide','tooltip treats metadata as text','three nearby lobby door clicks and return doors','distant door click rejected','30 illustrated combinations render','reduced-motion mode loads','appearance persisted after reload','distance-driven gait and idle pose','near-only bench click seating','button and movement stand up','100 mock exhibits','U16/T14','held keyboard movement and stop','U wall collision','E modal','like and comment paths','door E to lobby','overflow pagination','approval missing clears works','768px and 390px responsive','no page errors'],'draw_timing':timing,'errors':errors},ensure_ascii=False,indent=2))
 asyncio.run(main())
