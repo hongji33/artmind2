@@ -39,3 +39,12 @@ export function walls(id){
 export function nearDoor(id,x,y){return rooms[id].doors.find(d=>Math.hypot(d.x-x,d.y-y)<1.35)}
 export function exhibitionRange(id,page=0){return id===1?[0,16]:id===2?[16,30]:id===3?[30+page*16,46+page*16]:[0,0]}
 export function roomForIndex(index){return index<16?{id:1,page:0}:index<30?{id:2,page:0}:{id:3,page:Math.floor((index-30)/16)}}
+
+export function nearBench(id,x,y){return rooms[id].props.find(p=>p.kind==='bench'&&Math.hypot(p.x-x,p.y-y)<1.8)}
+export function standingPosition(id,bench,preferred){
+ if(preferred&&canStand(id,preferred.x,preferred.y))return {...preferred};
+ for(const [dx,dy] of [[0,.95],[0,-.95],[1.2,0],[-1.2,0],[.9,.9],[-.9,.9]]){
+  const p={x:bench.x+dx,y:bench.y+dy};if(canStand(id,p.x,p.y))return p;
+ }
+ return null;
+}
