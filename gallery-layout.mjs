@@ -14,7 +14,7 @@ export const rooms=[
  {name:'U자 전시관',spawn:{x:6,y:8.6},slots:uSlots,doors:[{x:6,y:10,to:0,label:'중앙 로비'}],props:[{kind:'plant',x:2,y:4},{kind:'plant',x:10,y:4},{kind:'bench',x:3,y:8},{kind:'floorlamp',x:2,y:7}]},
  {name:'T자 전시관',spawn:{x:6,y:8.6},slots:tSlots,doors:[{x:6,y:10,to:0,label:'중앙 로비'}],props:[{kind:'plant',x:10.5,y:2},{kind:'bench',x:6,y:5.5},{kind:'floorlamp',x:6.8,y:6.7}]},
  {name:'특별 전시관',spawn:{x:6,y:8.6},slots:extraSlots,doors:[{x:6,y:10,to:0,label:'중앙 로비'}],props:[{kind:'sculpture',x:6,y:4},{kind:'plant',x:10,y:2},{kind:'bench',x:3,y:7},{kind:'floorlamp',x:9,y:7}]},
- {name:'미술 체험실',spawn:{x:6,y:8.6},slots:[],doors:[{x:6,y:10,to:0,label:'중앙 로비'}],props:[{kind:'studio',x:6,y:4},{kind:'worktable',x:9,y:5.5},{kind:'bench',x:3,y:7},{kind:'plant',x:10,y:2},{kind:'floorlamp',x:2,y:5}]}
+ {name:'미술 체험실',spawn:{x:6,y:8.6},slots:[],doors:[{x:6,y:10,to:0,label:'중앙 로비'}],props:[{kind:'studio',zone:'atelier',x:2.7,y:2.3},{kind:'studio',zone:'light',x:8.7,y:2.3},{kind:'studio',zone:'digital',x:2.7,y:6},{kind:'studio',zone:'culture',x:8.7,y:6},{kind:'worktable',x:6,y:4.3},{kind:'bench',x:6,y:7.1},{kind:'plant',x:1,y:8.5},{kind:'plant',x:11,y:8.5},{kind:'floorlamp',x:1.3,y:4.2},{kind:'floorlamp',x:10.7,y:4.2}]}
 ];
 export function floorAt(id,x,y){
  if(x<0||y<0||x>=WIDTH||y>=HEIGHT)return false;
