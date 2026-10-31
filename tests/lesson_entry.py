@@ -11,7 +11,9 @@ async def main():
   browser=await p.chromium.launch(executable_path='/usr/bin/chromium',args=['--no-sandbox'])
   context=await browser.new_context(viewport={'width':1440,'height':1000});page=await context.new_page();errors=[];page.on('pageerror',lambda e:errors.append(e.stack))
   await context.route('**/*',lambda r:r.fulfill(content_type='text/javascript',body=FIREBASE_MOCK) if 'www.gstatic.com/firebasejs/' in r.request.url else r.fulfill(content_type='text/html',body='<h1>메타버스 연결 검증</h1>') if '/metaverse.html' in r.request.url else r.continue_() if r.request.url.startswith('http://127.0.0.1:8881') else r.abort())
+  await context.add_init_script("localStorage.setItem('maeum-v1',JSON.stringify({draft:'이전 학생 대본',name:'이전 이름',collection:[{draft:'이전 작품'}],exhibit:{title:'이전 전시',intent:'이전 친구에게 전할 마음'}}));localStorage.setItem('artmind2-student-identity-v1',JSON.stringify({grade:'3',classroom:'9',nickname:'이전 학생'}))")
   await page.goto('http://127.0.0.1:8881/index.html');await page.wait_for_function('document.querySelector("#lessonAuthStatus").textContent.includes("승인된 학급")')
+  assert await page.locator('#exIntent').input_value()=='';assert await page.locator('#exTitle').input_value()=='';assert await page.evaluate("localStorage.getItem('maeum-v1')") is None
   await page.select_option('#loginGrade','1');await page.select_option('#loginClass','1');await page.fill('#loginNickname','푸른별');await page.click('#lessonLogin');assert '푸른별' in await page.locator('#lessonStudentName').inner_text()
   assert await page.locator('#exGrade').input_value()=='1';assert await page.locator('#exClass').input_value()=='1';assert await page.locator('#exNickname').input_value()=='푸른별'
   await page.evaluate('window.scrollTo(0,0)');await page.screenshot(path='work/lesson-entry.png')
@@ -25,13 +27,13 @@ async def main():
   await page.locator('[data-mind-element="color"]').click();await page.fill('#mind-color','화면 속 색의 대비를 관찰했습니다.')
   await page.locator('[data-mind-tab="1"]').first.click();await page.fill('#mindFeeling','차분하고 따뜻한 마음이 들었습니다.')
   await page.locator('[data-mind-tab="2"]').first.click();await page.fill('#mindReflect','친구와 함께했던 순간을 떠올렸습니다.')
-  await page.locator('#exPublicConfirm').check();await page.click('#exSave');assert '저장했어요' in await page.locator('#exSaved').inner_text();assert '/index.html' in page.url
-  await page.evaluate('window.savedStudentDraft=JSON.stringify(JSON.parse(localStorage.getItem("maeum-v1")))')
+  await page.locator('#exPublicConfirm').check();await page.click('#exSave');assert '임시 저장했어요' in await page.locator('#exSaved').inner_text();assert '/index.html' in page.url
+  await page.evaluate('window.savedStudentDraft=JSON.stringify(JSON.parse(sessionStorage.getItem("artmind2-working-draft-v2")))')
   await page.locator('#exPublicConfirm').uncheck();await page.click('#onlinePublish');assert '/index.html' in page.url;assert not any(c[0]=='like' for c in await page.evaluate('window.calls'))
   await page.locator('#exPublicConfirm').check();page.once('dialog',lambda d:d.dismiss());await page.click('#onlinePublish');assert '/index.html' in page.url
   await page.evaluate('window.failWrite=true');page.once('dialog',lambda d:d.accept());await page.click('#onlinePublish');await page.wait_for_function('document.querySelector("#onlineStatus").textContent.includes("저장 실패")');assert '/index.html' in page.url
   # Logout preserves local work and blocks re-entry after refresh until the login button is used.
-  page.once('dialog',lambda d:d.accept());await page.click('#lessonLogout');await page.wait_for_function('document.querySelector("#lessonStudentName").textContent==="로그아웃 상태"');assert await page.evaluate('JSON.stringify(JSON.parse(localStorage.getItem("maeum-v1")))===window.savedStudentDraft')
+  page.once('dialog',lambda d:d.accept());await page.click('#lessonLogout');await page.wait_for_function('document.querySelector("#lessonStudentName").textContent==="로그아웃 상태"');assert await page.evaluate("sessionStorage.getItem('artmind2-working-draft-v2')") is None;assert await page.locator('#exIntent').input_value()==''
   await page.reload();await page.wait_for_function('document.querySelector("#lessonStudentName").textContent==="로그아웃 상태"');assert await page.evaluate('window.authSignIns||0')==0
   await page.evaluate('window.approved=false');await page.select_option('#loginGrade','1');await page.select_option('#loginClass','1');await page.fill('#loginNickname','다음별');await page.click('#lessonLogin');await page.wait_for_function('document.querySelector("#lessonAuthStatus").textContent.includes("교사에게")');assert 'student-1' in await page.locator('#lessonAuthStatus').inner_text();assert await page.locator('#onlinePublish').is_disabled()
   # Fresh, approved session: a successful explicit public save navigates to its exact exhibit.
@@ -42,10 +44,12 @@ async def main():
    if 'www.gstatic.com/firebasejs/' in r.request.url:return await r.fulfill(content_type='text/javascript',body=publish_mock)
    return await r.continue_() if r.request.url.startswith('http://127.0.0.1:8881') else await r.abort()
   await second.route('**/*',route_other)
-  await other.add_init_script("localStorage.setItem('artmind2-student-identity-v1',JSON.stringify({grade:'1',classroom:'1',nickname:'새별'}));localStorage.setItem('maeum-v1',JSON.stringify({exhibit:{grade:'1',classroom:'1',nickname:'새별',title:'나의 전시',intent:'내 감상문',works:{ko:{id:'test-work',artist:'윤두서',title:'자화상'}}}}))")
-  await other.goto('http://127.0.0.1:8881/index.html#exhibition');await other.wait_for_function('document.querySelector("#onlinePublish").disabled===false');await other.locator('#exPublicConfirm').check();other.once('dialog',lambda d:d.accept());await other.click('#onlinePublish');await other.wait_for_url('**/metaverse.html?exhibit=student');await other.wait_for_selector('#overlay.show');assert await other.locator('#modalTitle').inner_text()=='나의 전시';assert await other.locator('#modalStory').inner_text()=='내 감상문'
+  await other.goto('http://127.0.0.1:8881/index.html');await other.wait_for_function('document.querySelector("#lessonAuthStatus").textContent.includes("승인된 학급")')
+  await other.select_option('#loginGrade','1');await other.select_option('#loginClass','1');await other.fill('#loginNickname','새별');await other.click('#lessonLogin');await other.locator('button[data-pick]').first.click();await other.locator('[data-page="exhibition"]').click()
+  await other.fill('#exTitle','나의 전시');await other.fill('#exIntent','내 감상문');await other.locator('[data-mind-element="color"]').click();await other.fill('#mind-color','색을 관찰했어요');await other.locator('[data-mind-tab="1"]').first.click();await other.fill('#mindFeeling','따뜻해요');await other.locator('[data-mind-tab="2"]').first.click();await other.fill('#mindReflect','친구를 생각해요');await other.locator('#exPublicConfirm').check();await other.click('#exSave')
+  other.once('dialog',lambda d:d.accept());await other.click('#onlinePublish');await other.wait_for_url('**/metaverse.html?exhibit=student');await other.wait_for_selector('#overlay.show');assert await other.locator('#modalTitle').inner_text()=='나의 전시';assert await other.locator('#modalStory').inner_text()=='내 감상문'
   for width in [768,390]:
    await page.set_viewport_size({'width':width,'height':900});assert await page.evaluate('document.documentElement.scrollWidth<=innerWidth')
   assert not errors,errors
-  await browser.close();print(json.dumps({'passed':['header grade/class/nickname entry and original fields synced','approved classroom mismatch rejected','existing artwork selection and appreciation form','no consent/cancel/write failure do not navigate','anonymous logout and persisted signed-out state','local draft unchanged on logout','new UID waits for teacher approval','successful publish opens the saved exhibit in the actual metaverse page','768/390 responsive','no JS errors'],'errors':errors},ensure_ascii=False,indent=2))
+  await browser.close();print(json.dumps({'passed':['header grade/class/nickname entry and original fields synced','approved classroom mismatch rejected','existing artwork selection and appreciation form','no consent/cancel/write failure do not navigate','anonymous logout and persisted signed-out state','legacy browser data ignored and removed; all drafts empty after logout','new UID waits for teacher approval','successful publish opens the saved exhibit in the actual metaverse page','768/390 responsive','no JS errors'],'errors':errors},ensure_ascii=False,indent=2))
 asyncio.run(main())
