@@ -20,6 +20,7 @@ async def main():
   assert await page.locator('#accountForm').is_visible();assert not await page.get_by_text('교사 ID 복사').count()
   await signup(page,'first@example.com');assert await page.locator('#dashboard').is_visible();assert await page.locator('#accountPanel').is_hidden();assert await page.locator('#classCount').inner_text()=='0'
   await add_class(page,1,'1111');await add_class(page,2,'2222');assert await page.locator('#pinRows tr').count()==2
+  link=page.get_by_role('link',name='3-1 학생 화면 열기 (새 탭)',exact=True);assert await link.get_attribute('target')=='_blank';assert 'teacher=TeacherA' in await link.get_attribute('href');assert 'class=3-1' in await link.get_attribute('href');assert await page.get_by_role('button',name='링크 복사',exact=True).count()==2
   await page.locator('[data-pin="space:3-1"]').fill('0123');await page.locator('[data-pin="space:3-2"]').fill('3333');await page.click('#save');await page.wait_for_function('!document.querySelector("#settings").disabled');assert '2개 반' in await page.locator('#status').inner_text()
   for number,pin in [(1,'0123'),(2,'3333')]:
    data=await page.evaluate('(n)=>[window.records["artmind2_spaces/TeacherA/classes/3-"+n],window.records["artmind2_spaces/TeacherA/private_classes/3-"+n]]',number);assert data[1]['passwordHash']==hashlib.pbkdf2_hmac('sha256',pin.encode(),bytes.fromhex(data[0]['salt']),210000).hex()
