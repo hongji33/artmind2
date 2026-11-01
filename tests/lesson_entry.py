@@ -17,7 +17,7 @@ async def main():
   assert await page.locator('#lessonLoginShortcut').is_visible();await page.click('#lessonLoginShortcut');assert await page.locator('#loginNickname').evaluate('(el)=>el===document.activeElement');assert 'is-signed-out' in await page.locator('.lesson-header-account').get_attribute('class')
   assert await page.locator('#exIntent').input_value()=='';assert await page.locator('#exTitle').input_value()=='';assert await page.evaluate("localStorage.getItem('maeum-v1')") is None
   await page.select_option('#loginGrade','1');await page.select_option('#loginClass','1');await page.fill('#loginNickname','푸른별');await page.fill('#loginPassword','1111');await page.click('#lessonLogin');await page.wait_for_function('!document.querySelector("#lessonLogin").disabled');assert '푸른별' in await page.locator('#lessonStudentName').inner_text()
-  assert await page.locator('#lessonEnterGallery').is_visible();gallery=await page.locator('#lessonEnterGallery').get_attribute('href');assert '/metaverse.html?' in gallery and 'class=1-1' in gallery and 'v=classmates-3' in gallery;assert await page.locator('#lessonLoginShortcut').is_hidden()
+  assert await page.locator('#lessonEnterGallery').count()==0;assert await page.locator('#lessonLoginShortcut').is_hidden()
   assert await page.locator('#exGrade').input_value()=='1';assert await page.locator('#exClass').input_value()=='1';assert await page.locator('#exNickname').input_value()=='푸른별'
   await page.evaluate('window.scrollTo(0,0)');await page.screenshot(path='work/lesson-entry.png')
   # Existing artwork selection and the local appreciation flow remain available.
