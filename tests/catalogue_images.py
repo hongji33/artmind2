@@ -25,6 +25,7 @@ async def main():
    elif r.request.url.startswith('http://127.0.0.1:8889'):await r.continue_()
    else:await r.abort()
   await page.route('**/*',route);await page.goto('http://127.0.0.1:8889/index.html');await page.wait_for_selector('[data-group]')
+  await page.click('#helpBtn');guide=await page.locator('#help').inner_text();assert '감정에서 나만의 전시까지' in guide;assert '한 점' in guide;assert '온라인에 전시한 감상문은 반에 저장' in guide;assert 'Apps Script' not in guide and '영상' not in guide;await page.locator('#help [data-close]').click()
   omitted=0
   for i,e in enumerate(constants['DATA']):
    await page.locator('[data-group="'+str(e['group'])+'"]').click();await page.locator('[data-emotion="'+str(i)+'"]').click()
@@ -32,6 +33,8 @@ async def main():
     if not provided(w):
      omitted+=1;assert await page.locator('[data-card="'+w['id']+'"]').count()==0,w
    assert await page.locator('#koGrid [data-card],#westGrid [data-card]').count()>0,e['name']
+   for region in ['ko','west']:
+    assert await page.locator('#'+region+'WorkCount').inner_text()==str(await page.locator('#'+region+'Grid [data-card]').count())+'점'
   await page.locator('[data-group="0"]').click();await page.locator('[data-emotion="0"]').click()
   await page.evaluate('window.scrollTo(0,document.body.scrollHeight)');await page.wait_for_function('!document.querySelector("[data-card=\\"0-ko-2\\"]")');assert all(u in requests for u in blocked)
   assert await page.locator('[data-card="0-ko-1"]').count()==0
