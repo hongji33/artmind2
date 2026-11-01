@@ -5,7 +5,7 @@ const settle=()=>new Promise(resolve=>setImmediate(resolve));
 test('30 classmates: one person across tabs, room/page isolation and invalid/stale states',()=>{
  const now=1000000,raw={};for(let i=0;i<30;i++)raw['u'+i]={tab:{...state(),nickname:'친구'+i,lastSeen:now,roomId:i%3,speechCode:0,speechAt:0}};
  raw.u1.older={...state(),nickname:'old tab',lastSeen:now-10};raw.stale={tab:{...state(),lastSeen:now-STALE_AFTER-1}};raw.invalid={tab:{...state(),x:Infinity,lastSeen:now}};
- const peers=readPeers(raw,'u0',now);assert.equal(peers.length,29);assert.equal(peers.find(p=>p.uid==='u1').nickname,'친구1');assert.equal(roomPeers(peers,0).length,9);assert.throws(()=>safeState({...state(),x:13}));
+ const peers=readPeers(raw,'u0',now);assert.equal(peers.length,29);assert.equal(peers.find(p=>p.uid==='u1').nickname,'친구1');assert.equal(roomPeers(peers,0).length,9);assert.throws(()=>safeState({...state(),x:29}));
  const pages=[{...state(),roomId:3,page:0},{...state(),roomId:3,page:1}];assert.equal(roomPeers(pages,3,1).length,1);
 });
 test('presence auth gate, disconnect registration, throttled deltas, greeting cooldown and cleanup',async()=>{
@@ -32,4 +32,16 @@ test('a reconnect during an in-flight first write rebuilds the complete record',
  const transport={timestamp:()=>time,watch:(p,fn)=>{watchers.set(p,fn);return()=>watchers.delete(p)},remove:async()=>{},removeOnDisconnect:async()=>async()=>{},update:async(p,data)=>{writes.push(data);if(writes.length===1)await new Promise(r=>release=r)}};
  const session=createPresenceSession(transport,{host:'TeacherA',classId:'1-1',uid:'self',nickname:'나',getState:state,now:()=>time});
  try{watchers.get('museum_members/TeacherA/self')({classId:'1-1',joinedAt:time});watchers.get('.info/connected')(true);await settle();assert.equal(writes.length,1);watchers.get('.info/connected')(false);watchers.get('.info/connected')(true);time+=2000;release();await settle();await settle();await settle();assert.equal(writes.length,2);assert.ok(writes[1].appearance);assert.equal(writes[1].nickname,'나')}finally{await session.close()}
+});
+
+test('custom visual is bounded and shared once; movement does not resend image; reset removes it',async()=>{
+ let time=100000,position={...state(),visual:{fabric:'data:image/webp;base64,QUFB',avatar:'',fabricScale:24}};const watchers=new Map(),updates=[];
+ const transport={timestamp:()=>time,watch:(path,fn)=>{watchers.set(path,fn);return ()=>{}},update:async(path,data)=>updates.push(data),remove:async()=>{},removeOnDisconnect:async()=>async()=>{}};
+ const session=createPresenceSession(transport,{host:'TeacherA',classId:'1-1',uid:'self',nickname:'나',getState:()=>position,now:()=>time,sessionId:'tab'});
+ try{watchers.get('museum_members/TeacherA/self')({classId:'1-1',joinedAt:time});watchers.get('.info/connected')(true);await settle();await settle();assert.equal(updates[0].visual.fabric,position.visual.fabric);
+  time+=POSITION_INTERVAL;position.x=7;await session.publish();assert.equal('visual' in updates.at(-1),false);
+  time+=POSITION_INTERVAL;position.visual=null;await session.publish();assert.equal(updates.at(-1).visual,null);
+  assert.equal('visual' in safeState({...state(),visual:{fabric:'https://example.com/image.png'}}),false);
+  assert.equal('visual' in safeState({...state(),visual:{fabric:'data:image/png;base64,'+'A'.repeat(25000)}}),false);
+ }finally{await session.close()}
 });
