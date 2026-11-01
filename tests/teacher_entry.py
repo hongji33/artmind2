@@ -3,12 +3,13 @@ import asyncio,threading,hashlib
 from http.server import ThreadingHTTPServer,SimpleHTTPRequestHandler
 from playwright.async_api import async_playwright
 from teacher_mock import MOCK
+from realtime_mock import RTDB
 class Quiet(SimpleHTTPRequestHandler):
  def log_message(self,*args):pass
 server=ThreadingHTTPServer(('127.0.0.1',8885),Quiet);threading.Thread(target=server.serve_forever,daemon=True).start()
 async def setup(browser,legacy=False):
  context=await browser.new_context();await context.add_init_script("localStorage.setItem('artmind-gallery-signed-out-v1','student-marker');"+("window.initialAnon=true;window.records={'artmind2_teachers/LegacyTeacher':{enabled:true,classIds:['3-1']},'artmind2_class_public/3-1':{salt:'0123456789abcdef0123456789abcdef',iterations:210000},'artmind2_class_access/3-1':{enabled:true,passwordHash:'0'.repeat(64)},'artmind2_exhibits/old-work':{classId:'3-1',title:'기존 작품',story:'기존 감상문',nickname:'별',work:{}}};" if legacy else ''))
- await context.route('**/*',lambda r:r.fulfill(content_type='text/javascript',body=MOCK) if 'www.gstatic.com/firebasejs/' in r.request.url else r.continue_() if r.request.url.startswith('http://127.0.0.1:8885') else r.abort());page=await context.new_page();await page.goto('http://127.0.0.1:8885/teacher.html');return context,page
+ await context.route('**/*',lambda r:r.fulfill(content_type='text/javascript',body=RTDB) if r.request.url.endswith('firebase-database.js') else r.fulfill(content_type='text/javascript',body=MOCK) if 'www.gstatic.com/firebasejs/' in r.request.url else r.continue_() if r.request.url.startswith('http://127.0.0.1:8885') else r.abort());page=await context.new_page();await page.goto('http://127.0.0.1:8885/teacher.html');return context,page
 async def signup(page,email):
  await page.click('#accountMode');await page.fill('#displayName','미술 선생님');await page.fill('#email',email);await page.fill('#password','teacher-pass');await page.fill('#passwordConfirm','teacher-pass');await page.click('#accountSubmit');await page.wait_for_function('!document.querySelector("#settings").disabled')
 async def add_class(page,number,pin):
@@ -29,6 +30,8 @@ async def main():
   await page.get_by_role('button',name='다시 전시',exact=True).click();await page.wait_for_function('!document.querySelector("#settings").disabled');assert await page.evaluate("window.records['artmind2_spaces/TeacherA/exhibits/student'].hidden") is False
   row=page.locator('tr:has([data-pin="space:3-2"])');page.once('dialog',lambda d:d.accept());await row.get_by_role('button',name='반 보관').click();await page.wait_for_function('!document.querySelector("#settings").disabled');assert await row.is_hidden();await page.locator('#showArchived').check();page.once('dialog',lambda d:d.accept());await row.get_by_role('button',name='복원').click();await page.wait_for_function('!document.querySelector("#settings").disabled');assert await row.is_visible()
   before=await page.evaluate('JSON.stringify(window.records)');await page.evaluate('window.failWrite=true');await page.locator('[data-pin="space:3-1"]').fill('4444');await page.click('#save');await page.wait_for_function('!document.querySelector("#settings").disabled');assert await page.evaluate('JSON.stringify(window.records)')==before;assert await page.locator('[data-pin="space:3-1"]').input_value()=='4444';await page.evaluate('window.failWrite=false')
+  await page.evaluate('window.failRealtime=true');await page.locator('[data-pin="space:3-1"]').fill('6666');await page.click('#save');await page.wait_for_function('!document.querySelector("#settings").disabled');assert await page.locator('#realtimeRetry').is_visible();assert await page.evaluate("window.records['artmind2_spaces/TeacherA/private_classes/3-1'].passwordHash!==window.rtData.museum_classes.TeacherA['3-1'].passwordHash")
+  await page.evaluate('window.failRealtime=false');await page.click('#realtimeRetry');await page.wait_for_function('!document.querySelector("#settings").disabled');assert await page.locator('#realtimeRetry').is_hidden();assert await page.evaluate("window.records['artmind2_spaces/TeacherA/private_classes/3-1'].passwordHash===window.rtData.museum_classes.TeacherA['3-1'].passwordHash")
   assert await page.evaluate("localStorage.getItem('artmind-gallery-signed-out-v1')")=='student-marker'
   for width in [768,390]:
    await page.set_viewport_size({'width':width,'height':900});assert await page.evaluate('document.documentElement.scrollWidth<=innerWidth')

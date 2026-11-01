@@ -398,6 +398,7 @@ function entryProof(){try{return JSON.parse(sessionStorage.getItem(ENTRY_KEY)||'
 function forgetEntry(){sessionStorage.removeItem(ENTRY_KEY)}
 const entryParams=new URLSearchParams(location.search);
 const teacherContext=entryParams.has('teacher')?entryParams.get('teacher'):(entryProof()?.teacherId||'');
+const presenceHost=teacherContext||entryParams.get('host')||entryProof()?.presenceHost||'';
 let user=null,member=null,authEpoch=0,authBusy=false,publishing=false,signedOut=false;try{signedOut=localStorage.getItem('artmind-gallery-signed-out-v1')==='1'}catch{}
 const status=t=>$('#onlineStatus').textContent=t;
 const studentLabel=m=>`${String(m.classId).replace(/^([1-3])-([0-9]+)$/, '$1학년 $2반')} ${m.nickname||'학생'}`;
@@ -434,8 +435,8 @@ const nicknameNow=String(member.nickname||'학생');
 d.grade=gradeNow;d.classroom=classNow;d.nickname=nicknameNow;
 if(!gradeNow||!classNow||!nicknameNow){status('로그인 정보를 확인하지 못했습니다. 다시 로그인해 주세요.');return}
 if(!$('#exPublicConfirm').checked){status('온라인 전시 전에 「친구에게 공개하고 싶지 않은 개인적인 경험이 없는지 확인했어요」에 체크해 주세요.');return}const w=getPublicWork(d);if(!w){status('작품을 먼저 선택해 주세요.');return}if(!window.confirm('선택한 작품, 제목, 공개용 감상문을 같은 반 친구들에게 공개할까요? 개인적인 경험이 포함되었는지 다시 확인하세요.'))return;
-status('온라인 전시를 저장하고 있습니다…');const id=user.uid;await setDoc(doc(db,...exhibitSegments(member?.teacherId,id)),{owner:user.uid,classId:member.classId,grade:safe(d.grade),classroom:safe(d.classroom),nickname:safe(d.nickname).slice(0,30),title:safe(d.title).slice(0,100),story:safe(d.intent).slice(0,3000),work:w,updatedAt:serverTimestamp()},{merge:true});if(signedOut||epoch!==authEpoch||user?.uid!==id)return;showLink(id);status('온라인 전시를 저장했습니다. 메타버스 미술관으로 이동합니다…');const target=new URL('./metaverse.html',location.href);target.searchParams.set('exhibit',id);if(member?.teacherId)target.searchParams.set('teacher',member.teacherId);location.assign(target.href)}catch(e){if(epoch===authEpoch&&!signedOut)status('온라인 전시 저장 실패: '+e.message)}finally{publishing=false;lessonControls()}}
-function showLink(id){const url=new URL(location.href);url.searchParams.set('exhibit',id);if(member?.teacherId)url.searchParams.set('teacher',member.teacherId);url.hash='onlineGallery';const target=$('#onlineLink');target.replaceChildren();const a=make('a','전시 주소 복사 / 열기');a.href=url.href;a.target='_blank';a.rel='noopener';target.append(a);const copy=make('button','주소 복사');copy.type='button';copy.onclick=()=>navigator.clipboard?.writeText(url.href).then(()=>status('주소를 복사했습니다.')).catch(()=>status('위 링크를 길게 눌러 복사해 주세요.'));target.append(' ',copy);const qr=$('#onlineQr');qr.replaceChildren();if(window.QRCode){new window.QRCode(qr,{text:url.href,width:184,height:184,correctLevel:window.QRCode.CorrectLevel.M})}else{qr.textContent='QR 라이브러리를 불러오지 못했습니다. 전시 링크를 이용하세요.'}}
+status('온라인 전시를 저장하고 있습니다…');const id=user.uid;await setDoc(doc(db,...exhibitSegments(member?.teacherId,id)),{owner:user.uid,classId:member.classId,grade:safe(d.grade),classroom:safe(d.classroom),nickname:safe(d.nickname).slice(0,30),title:safe(d.title).slice(0,100),story:safe(d.intent).slice(0,3000),work:w,updatedAt:serverTimestamp()},{merge:true});if(signedOut||epoch!==authEpoch||user?.uid!==id)return;showLink(id);status('온라인 전시를 저장했습니다. 메타버스 미술관으로 이동합니다…');const target=new URL('./metaverse.html',location.href);target.searchParams.set('exhibit',id);if(member?.teacherId)target.searchParams.set('teacher',member.teacherId);else if(presenceHost)target.searchParams.set('host',presenceHost);location.assign(target.href)}catch(e){if(epoch===authEpoch&&!signedOut)status('온라인 전시 저장 실패: '+e.message)}finally{publishing=false;lessonControls()}}
+function showLink(id){const url=new URL(location.href);url.searchParams.set('exhibit',id);if(member?.teacherId)url.searchParams.set('teacher',member.teacherId);else if(presenceHost)url.searchParams.set('host',presenceHost);url.hash='onlineGallery';const target=$('#onlineLink');target.replaceChildren();const a=make('a','전시 주소 복사 / 열기');a.href=url.href;a.target='_blank';a.rel='noopener';target.append(a);const copy=make('button','주소 복사');copy.type='button';copy.onclick=()=>navigator.clipboard?.writeText(url.href).then(()=>status('주소를 복사했습니다.')).catch(()=>status('위 링크를 길게 눌러 복사해 주세요.'));target.append(' ',copy);const qr=$('#onlineQr');qr.replaceChildren();if(window.QRCode){new window.QRCode(qr,{text:url.href,width:184,height:184,correctLevel:window.QRCode.CorrectLevel.M})}else{qr.textContent='QR 라이브러리를 불러오지 못했습니다. 전시 링크를 이용하세요.'}}
 // 같은 반 승인 회원만 학급 전시 목록을 조회합니다. Firestore 규칙의 classId 필터와 일치해야 합니다.
 async function showClassGallery(){
  const epoch=authEpoch;const root=$('#classGallery');root.replaceChildren();
@@ -498,8 +499,8 @@ $('#lessonLoginForm').onsubmit=async e=>{
  try{
   if(auth.currentUser)await signOut(auth);
   const credential=await signInAnonymously(auth);
-  await enterClass(db,credential.user.uid,{classId:classKey(identity),nickname:identity.nickname,password,teacherId:teacherContext});
-  sessionStorage.setItem(ENTRY_KEY,JSON.stringify({uid:credential.user.uid,classId:classKey(identity),teacherId:teacherContext}));
+  await enterClass(db,credential.user.uid,{classId:classKey(identity),nickname:identity.nickname,password,teacherId:teacherContext,presenceHost});
+  sessionStorage.setItem(ENTRY_KEY,JSON.stringify({uid:credential.user.uid,classId:classKey(identity),teacherId:teacherContext,presenceHost}));
   sessionStorage.setItem('artmind2-working-identity-v2',JSON.stringify(identity));
   setLessonSignedOut(false);syncLessonInputs(identity);await handleLessonAuth(credential.user);
  }catch(e){
