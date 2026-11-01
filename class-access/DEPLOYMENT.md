@@ -36,3 +36,7 @@ npx --yes firebase-tools@14.22.0 emulators:exec --project demo-artmind-free --co
 ```
 
 에뮬레이터 다운로드가 이 작업 환경의 네트워크 정책에 막혀 규칙 실행 검사는 아직 수행하지 못했습니다. 설치 전에는 준비된 코드를 운영 완료로 간주하지 않습니다.
+
+## 개인번호 계정 추가
+
+개인번호·작성 복원을 배포하려면 최신 Firestore 및 Realtime Database 규칙을 모두 적용합니다. 이전 갤러리 규칙 게시와 별도입니다. [개인번호 설치 안내](PERSONAL_ACCOUNTS.md)를 따릅니다. 교사가 학생의 원문 번호를 확인할 수 있는 기능이므로 해당 기록은 담당 교사 전용 경로에 보관합니다.

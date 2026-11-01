@@ -127,10 +127,12 @@ service cloud.firestore {
      allow get: if self();
      allow list: if false;
      allow create: if self() && validEntry();
-     // Only removal of the temporary proof is permitted. Class/name cannot be edited.
-     allow update: if self()
-      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['passwordProof'])
-      && !('passwordProof' in request.resource.data);
+     // Reauthenticate the same class/name with the class proof, or remove that temporary proof.
+     allow update: if self() && ((request.resource.data.diff(resource.data).affectedKeys().hasOnly(['passwordProof'])
+      && !('passwordProof' in request.resource.data)) || (validEntry()
+      && request.resource.data.classId == resource.data.classId
+      && request.resource.data.nickname == resource.data.nickname
+      && request.resource.data.get('teacherId','') == resource.data.get('teacherId','')));
      allow delete: if false;
     }
 
@@ -253,6 +255,46 @@ service cloud.firestore {
     }
     match /artmind2_spaces/{teacherId} {
       allow read, write: if false;
+      function studentInHost(uid,classId) {
+        let m = get(/databases/$(database)/documents/artmind2_members/$(uid)).data;
+        return request.auth != null && request.auth.uid == uid && m.classId == classId
+          && (m.get('teacherId','') == teacherId || (m.get('teacherId','') == ''
+            && get(/databases/$(database)/documents/artmind2_teachers/$(teacherId)).data.enabled == true
+            && classId in get(/databases/$(database)/documents/artmind2_teachers/$(teacherId)).data.classIds));
+      }
+      match /student_accounts/{uid} {
+        function validAccount() { let d=request.resource.data;return d.keys().hasAll(['uid','classId','nickname','email','pin','updatedAt'])
+          && d.keys().hasOnly(['uid','classId','nickname','email','pin','pendingPin','updatedAt'])
+          && d.uid == uid && d.classId is string && d.nickname is string && d.nickname.size() > 0 && d.nickname.size() <= 20
+          && d.email is string && d.email.size() <= 100 && d.pin is string && d.pin.matches('[0-9]{6}')
+          && (!('pendingPin' in d) || (d.pendingPin is string && d.pendingPin.matches('[0-9]{6}')))
+          && d.updatedAt == request.time;
+        }
+        allow get, list: if ownTeacher(teacherId);
+        allow create: if validAccount() && studentInHost(uid,request.resource.data.classId)
+          && request.auth.token.email == request.resource.data.email
+          && request.resource.data.nickname == get(/databases/$(database)/documents/artmind2_members/$(uid)).data.nickname;
+        allow update: if validAccount() && request.resource.data.uid == resource.data.uid
+          && request.resource.data.classId == resource.data.classId
+          && request.resource.data.nickname == resource.data.nickname && request.resource.data.email == resource.data.email
+          && (ownTeacher(teacherId) || (studentInHost(uid,resource.data.classId)
+            && request.auth.token.email == resource.data.email
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pin','updatedAt'])
+            && (request.resource.data.pin == resource.data.pin || request.resource.data.pin == resource.data.get('pendingPin',''))));
+        allow delete: if false;
+      }
+      match /student_drafts/{uid} {
+        allow get: if request.auth != null && request.auth.uid == uid;
+        allow list, delete: if false;
+        allow create, update: if request.resource.data.keys().hasAll(['uid','classId','nickname','activity','updatedAt'])
+          && request.resource.data.keys().hasOnly(['uid','classId','nickname','activity','updatedAt'])
+          && request.resource.data.uid == uid && request.resource.data.nickname is string
+          && request.resource.data.nickname.size() <= 20 && request.resource.data.activity is map
+          && request.resource.data.updatedAt == request.time
+          && studentInHost(uid,request.resource.data.classId)
+          && request.resource.data.nickname == get(/databases/$(database)/documents/artmind2_members/$(uid)).data.nickname
+          && exists(/databases/$(database)/documents/artmind2_spaces/$(teacherId)/student_accounts/$(uid));
+      }
       match /classes/{classId} {
         allow get: if signedIn();
         allow list: if ownTeacher(teacherId);

@@ -20,3 +20,5 @@ export const setDoc=async(path,value)=>apply([['set',path,value]]);export const 
 export const writeBatch=()=>{const writes=[];return {set:(p,v)=>writes.push(['set',p,v]),update:(p,v)=>writes.push(['update',p,v]),commit:async()=>apply(writes)}};
 export const runTransaction=async(db,fn)=>{const writes=[];await fn({get:async p=>snap(p),set:(p,v)=>writes.push(['set',p,v])});apply(writes)};
 """
+
+MOCK+="export const deleteField=()=>({remove:true});"
