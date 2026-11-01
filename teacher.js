@@ -1,73 +1,47 @@
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
-import {getAuth,signInAnonymously,onAuthStateChanged,signOut,EmailAuthProvider,linkWithCredential,signInWithEmailAndPassword,sendPasswordResetEmail} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
-import {getFirestore,doc,getDoc,writeBatch} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
-import {derivePasswordProof,validClassId,ITERATIONS} from './class-access/password-crypto.mjs';
+import {getAuth,onAuthStateChanged,signOut,EmailAuthProvider,linkWithCredential,createUserWithEmailAndPassword,signInWithEmailAndPassword,sendPasswordResetEmail} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
+import {getFirestore} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+import {profile,listClasses,createClass,saveClassChanges,listArtworks,setArtworkHidden} from './teacher-data.mjs';
+import {studentLink} from './workspace-paths.mjs';
 const config={apiKey:'AIzaSyCMOfNf_Klgklok0vWYnOwnfOIMw2ixtoQ',authDomain:'artmind2-2edd4.firebaseapp.com',projectId:'artmind2-2edd4',storageBucket:'artmind2-2edd4.firebasestorage.app',messagingSenderId:'733626442696',appId:'1:733626442696:web:e9ad3e3ba86bd3a90796fd'};
-// Named app isolates the teacher credential from the student anonymous session.
 const app=initializeApp(config,'artmind-teacher'),auth=getAuth(app),db=getFirestore(app),$=id=>document.getElementById(id);
-let user=null,classes=[],epoch=0,busy=false;
-function accountError(error){return ({'auth/operation-not-allowed':'이메일 로그인이 아직 활성화되지 않았습니다. Firebase 관리자에게 이메일/비밀번호 로그인 활성화를 요청해 주세요. (최초 한 번)', 'auth/email-already-in-use':'이미 등록된 이메일입니다. 로그인 버튼을 눌러 주세요. 기존 기기 권한은 자동으로 합쳐지지 않습니다.', 'auth/invalid-credential':'이메일 또는 비밀번호가 올바르지 않습니다.', 'auth/invalid-email':'이메일 주소를 확인해 주세요.', 'auth/weak-password':'비밀번호는 6자 이상 입력해 주세요.', 'auth/too-many-requests':'요청이 많습니다. 잠시 후 다시 시도해 주세요.', 'auth/network-request-failed':'인터넷 연결을 확인해 주세요.', 'auth/requires-recent-login':'다시 로그인한 뒤 시도해 주세요.'})[error?.code]||'계정 작업을 완료하지 못했습니다. 입력 내용과 연결 상태를 확인해 주세요.'}
-
-const rows=new Map();
-function renderRows(){rows.clear();$('pinRows').replaceChildren();for(const classId of classes){const tr=document.createElement('tr'),name=document.createElement('th'),pinCell=document.createElement('td'),allowCell=document.createElement('td'),pin=document.createElement('input'),enabled=document.createElement('input');name.scope='row';name.textContent=classId;pin.type=$('showPin').checked?'text':'password';pin.inputMode='numeric';pin.pattern='[0-9]{4}';pin.minLength=pin.maxLength=4;pin.autocomplete='off';pin.placeholder='4자리';pin.dataset.pin=classId;pin.setAttribute('aria-label',classId+' 새 비밀번호');enabled.type='checkbox';enabled.checked=true;enabled.setAttribute('aria-label',classId+' 새 입장 허용');pinCell.append(pin);allowCell.append(enabled);tr.append(name,pinCell,allowCell);$('pinRows').append(tr);rows.set(classId,{pin,enabled})}}
-function controls(){ $('accountForm').hidden=!!user&&!user.isAnonymous;$('accountActions').hidden=!user||user.isAnonymous;$('accountName').textContent=user&&!user.isAnonymous?(user.email||'교사 계정'):'';for(const el of $('accountForm').elements)el.disabled=busy;$('connect').textContent='기존 기기 연결'; $('settings').disabled=busy||!user||!classes.length;$('connect').disabled=busy;$('connect').hidden=!!user;$('logout').hidden=$('copy').hidden=!user;$('logout').disabled=busy;$('refresh').disabled=busy; }
-async function load(u){const ticket=++epoch;user=u;classes=[];$('showPin').checked=true;renderRows();$('registration').hidden=!u;$('teacherId').textContent=u?.uid||'';$('teacherPath').textContent=u?'artmind2_teachers/'+u.uid:'';$('identity').textContent='';controls();if(!u){$('status').textContent='이메일과 비밀번호로 로그인하거나 교사 계정을 등록해 주세요.';return}
- try{const snap=await getDoc(doc(db,'artmind2_teachers',u.uid));if(ticket!==epoch)return;const role=snap.exists()?snap.data():null;classes=role?.enabled===true&&Array.isArray(role.classIds)?[...new Set(role.classIds.filter(validClassId))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true})):[];
- renderRows();$('identity').textContent=classes.length?'관리 가능한 학반: '+classes.join(', '):'교사 등록 대기';$('registration').hidden=!!classes.length;$('status').textContent=classes.length?'표에 반별 숫자 4자리를 입력하고 한 번에 저장하세요.':'계정은 연결되었습니다. 최초 교사 승인과 담당 반 지정이 필요합니다. 아래 ID로 관리자에게 승인을 요청해 주세요.';
- }catch{if(ticket===epoch)$('status').textContent='교사 권한을 확인하지 못했습니다. 연결과 보안 규칙을 확인해 주세요.'}finally{if(ticket===epoch)controls()}}
-onAuthStateChanged(auth,load);
-$('connect').onclick=async()=>{if(busy)return;busy=true;controls();try{const result=await signInAnonymously(auth);await load(result.user)}catch{$('status').textContent='교사 기기를 연결하지 못했습니다.'}finally{busy=false;controls()}};
-
-$('accountForm').onsubmit=async e=>{
- e.preventDefault();if(busy)return;
- const email=$('teacherEmail').value.trim(),password=$('teacherPassword').value;
- if(!$('accountForm').reportValidity())return;
- const register=e.submitter?.id==='registerAccount';
- if(register&&password.length<6){$('status').textContent='등록할 비밀번호는 6자 이상 입력해 주세요.';return}
- if(!register&&user?.isAnonymous&&classes.length&&!confirm('이 기기의 교사 권한을 유지하려면 먼저 교사 계정 등록을 이용하세요. 다른 계정으로 로그인할까요?'))return;
- busy=true;controls();
- try{
-  if(register){
-   const current=auth.currentUser;
-   if(current&&!current.isAnonymous)throw Error('already-signed-in');
-   const anonymous=current||(await signInAnonymously(auth)).user;
-   await linkWithCredential(anonymous,EmailAuthProvider.credential(email,password));
-  }else await signInWithEmailAndPassword(auth,email,password);
-  $('teacherPassword').value='';
-  await load(auth.currentUser);
- }catch(error){$('status').textContent=accountError(error)}
- finally{busy=false;controls()}
-};
-$('resetPassword').onclick=async()=>{
- if(busy)return;const email=$('teacherEmail').value.trim();
- if(!$('teacherEmail').reportValidity())return;
- busy=true;controls();
- try{await sendPasswordResetEmail(auth,email);$('status').textContent='등록된 이메일이면 비밀번호 재설정 안내가 발송됩니다. 메일함과 스팸함을 확인해 주세요.'}
- catch(error){$('status').textContent=accountError(error)}
- finally{busy=false;controls()}
-};
-$('refresh').onclick=()=>{if(!busy)load(auth.currentUser)};
-
-$('copy').onclick=async()=>{if(!user)return;try{await navigator.clipboard.writeText(user.uid);$('status').textContent='교사 ID를 복사했습니다.'}catch{$('status').textContent='표시된 교사 ID를 직접 복사해 주세요.'}};
-$('logout').onclick=async()=>{if(busy||!user)return;if(!confirm(user.isAnonymous?'이 기기는 아직 이메일 계정과 연결되지 않았습니다. 먼저 교사 계정을 등록하면 같은 ID로 다시 로그인할 수 있습니다. 그래도 연결을 해제할까요?':'교사 계정에서 로그아웃할까요?'))return;busy=true;controls();try{await signOut(auth);await load(null)}catch{$('status').textContent='연결을 해제하지 못했습니다.'}finally{busy=false;controls()}};
-$('showPin').onchange=()=>{for(const {pin} of rows.values())pin.type=$('showPin').checked?'text':'password'};
-$('pinForm').onsubmit=async e=>{
- e.preventDefault();if(busy||!user||!classes.length||!$('pinForm').reportValidity())return;
- const entries=classes.map(classId=>({classId,pin:rows.get(classId)?.pin.value||'',enabled:rows.get(classId)?.enabled.checked===true})).filter(entry=>entry.pin!=='');
- if(!entries.length){$('status').textContent='변경할 반의 새 비밀번호를 입력해 주세요.';return}
- const owner=user.uid,ticket=epoch;busy=true;controls();
- try{
-  const batch=writeBatch(db);
-  for(let i=0;i<entries.length;i++){
-   $('status').textContent=`반 비밀번호를 준비하고 있습니다… ${i+1}/${entries.length}`;
-   const {classId,pin,enabled}=entries[i],salt=[...crypto.getRandomValues(new Uint8Array(16))].map(n=>n.toString(16).padStart(2,'0')).join(''),passwordHash=await derivePasswordProof(pin,salt);
-   if(ticket!==epoch||user?.uid!==owner)return;
-   batch.set(doc(db,'artmind2_class_public',classId),{salt,iterations:ITERATIONS});
-   batch.set(doc(db,'artmind2_class_access',classId),{enabled,passwordHash});
-  }
-  $('status').textContent=entries.length+'개 반 비밀번호를 저장하고 있습니다…';
-  await batch.commit();
-  if(ticket===epoch){for(const {classId} of entries)rows.get(classId).pin.value='';$('status').textContent=entries.length+'개 반 비밀번호를 저장했습니다. ('+entries.map(e=>e.classId).join(', ')+') 새 입장부터 적용됩니다.'}
- }catch{if(ticket===epoch)$('status').textContent='저장하지 못했습니다. 입력한 번호는 유지됩니다. 교사 승인·담당 학반·연결 상태를 확인한 뒤 다시 저장해 주세요.'}
- finally{busy=false;controls()}
-};
+let user=null,classes=[],epoch=0,artEpoch=0,authBusy=false,busy=false,ready=false,signup=false,pendingName='',artBusy=false,cursor=null,artworks=[];const rows=new Map();
+function message(text){$('status').textContent=text}
+function accountError(e){return ({'auth/operation-not-allowed':'교사 로그인 서비스가 아직 준비되지 않았습니다. 서비스 관리자에게 문의해 주세요.','auth/email-already-in-use':'이미 사용 중인 이메일입니다. 로그인하거나 비밀번호 찾기를 이용해 주세요.','auth/credential-already-in-use':'이미 다른 계정에 연결된 이메일입니다. 해당 계정으로 로그인해 주세요.','auth/invalid-credential':'아이디 또는 비밀번호를 확인해 주세요.','auth/user-not-found':'아이디 또는 비밀번호를 확인해 주세요.','auth/wrong-password':'아이디 또는 비밀번호를 확인해 주세요.','auth/invalid-email':'이메일 형식의 아이디를 입력해 주세요.','auth/weak-password':'교사 비밀번호는 8자 이상으로 만들어 주세요.','auth/too-many-requests':'잠시 후 다시 시도해 주세요.','auth/network-request-failed':'인터넷 연결을 확인해 주세요.'})[e?.code]||'작업을 완료하지 못했습니다. 입력 내용과 연결 상태를 확인해 주세요.'}
+function controls(){const locked=busy||authBusy||!ready;$('settings').disabled=$('createFields').disabled=locked;$('accountFields').disabled=$('accountMode').disabled=$('resetPassword').disabled=authBusy;$('logout').disabled=busy||authBusy;$('reloadArt').disabled=$('artClass').disabled=$('moreArt').disabled=locked||artBusy||!classes.length;$('showArchived').disabled=locked;for(const button of document.querySelectorAll('[data-manage]'))button.disabled=locked}
+function setMode(value){signup=value;$('accountTitle').textContent=signup?'교사 계정 만들기':'교사 로그인';$('nameLabel').hidden=$('confirmLabel').hidden=!signup;$('displayName').required=$('passwordConfirm').required=signup;$('password').minLength=signup?8:6;$('password').autocomplete=signup?'new-password':'current-password';$('accountSubmit').textContent=signup?'계정 만들고 시작하기':'로그인';$('accountMode').textContent=signup?'이미 계정이 있어요 · 로그인':'처음이라면 교사 계정 만들기';$('password').value=$('passwordConfirm').value=''}
+function text(tag,value,cls){const node=document.createElement(tag);node.textContent=value;if(cls)node.className=cls;return node}
+function manage(label,fn){const b=text('button',label,'secondary');b.type='button';b.dataset.manage='';b.onclick=fn;return b}
+function renderClasses(){
+ rows.clear();$('pinRows').replaceChildren();const selected=$('artClass').value;$('artClass').replaceChildren();
+ for(const item of classes){
+  const tr=document.createElement('tr'),label=document.createElement('input'),pin=document.createElement('input'),enabled=document.createElement('input'),actions=document.createElement('div');
+  const name=text('td',item.classId+(item.legacy?' · 기존':''));label.value=item.label||item.classId;label.maxLength=60;label.required=true;label.readOnly=item.legacy;label.dataset.label=item.key;label.setAttribute('aria-label',item.classId+' 표시 이름');pin.inputMode='numeric';pin.pattern='[0-9]{4}';pin.minLength=pin.maxLength=4;pin.autocomplete='off';pin.placeholder=item.configured===false?'처음 번호':'4자리';pin.dataset.pin=item.key;pin.setAttribute('aria-label',item.classId+' 새 번호');enabled.type='checkbox';enabled.checked=item.enabled===true;enabled.setAttribute('aria-label',item.classId+' 입장 허용');label.disabled=pin.disabled=enabled.disabled=item.archived===true;
+  for(const input of [label,pin,enabled]){const td=document.createElement('td');td.append(input);tr.append(td)}tr.prepend(name);
+  actions.className='actions';actions.append(manage('학생 링크',async()=>{const link=studentLink(location.href,item.legacy?'':user.uid,item.classId);try{await navigator.clipboard.writeText(link);message(item.classId+' 학생 입장 링크를 복사했습니다.')}catch{message('학생 입장 링크: '+link)}}),manage('작품 보기',()=>{$('artClass').value=item.key;loadArt();$('artSection').scrollIntoView({behavior:'smooth'})}),manage(item.archived?'복원':item.legacy?'입장 중지':'반 보관',()=>archive(item)));
+  const td=document.createElement('td');td.append(actions);tr.append(td);tr.hidden=item.archived&&!$('showArchived').checked;$('pinRows').append(tr);rows.set(item.key,{tr,label,pin,enabled});
+  $('artClass').append(new Option(item.classId+(item.label&&item.label!==item.classId?' · '+item.label:'')+(item.archived?' (보관)':''),item.key));
+ }
+ if(classes.some(i=>i.key===selected))$('artClass').value=selected;
+ $('classCount').textContent=classes.filter(i=>!i.archived).length;$('archiveCount').textContent=classes.filter(i=>i.archived).length;controls();
+}
+async function refreshClasses(){const ticket=epoch,uid=user.uid;const result=await listClasses(db,uid);if(ticket!==epoch||user?.uid!==uid)return;classes=result;renderClasses()}
+async function load(u){
+ const ticket=++epoch;++artEpoch;artBusy=false;$('moreArt').hidden=true;user=u;ready=false;classes=[];rows.clear();$('pinRows').replaceChildren();$('artGrid').replaceChildren();$('artClass').replaceChildren();$('artDialog').close();for(const id of ['artTitle','artInfo','artStory'])$(id).textContent='';artworks=[];cursor=null;$('accountName').textContent='';$('newPin').value='';$('logout').hidden=!u||u.isAnonymous;$('accountPanel').hidden=!!u&&!u.isAnonymous;$('dashboard').hidden=!u||u.isAnonymous;controls();
+ if(!u||u.isAnonymous){$('accountHint').textContent='이메일 아이디와 비밀번호로 로그인하세요.';if(u?.isAnonymous)$('accountHint').textContent='이 기기에서 계정을 만들면 기존에 등록한 반과 작품을 이어서 관리할 수 있습니다.';message('교사 계정으로 로그인해 주세요.');return}
+ message('내 반을 불러오고 있습니다…');try{const data=await profile(db,u.uid,pendingName);if(ticket!==epoch)return;$('accountName').textContent=data.displayName;await refreshClasses();if(ticket!==epoch)return;ready=true;controls();message(classes.length?'내 반 설정과 작품을 관리할 수 있습니다.':'첫 번째 반을 추가해 주세요.');if(classes.length)await loadArt()}catch{if(ticket===epoch)message('관리자 화면을 준비하지 못했습니다. 연결 상태를 확인하고 계속되면 서비스 관리자에게 문의해 주세요.')}
+}
+onAuthStateChanged(auth,u=>{if(!authBusy)load(u)});
+$('accountMode').onclick=()=>setMode(!signup);
+$('accountForm').onsubmit=async e=>{e.preventDefault();if(authBusy||!$('accountForm').reportValidity())return;if(signup&&$('password').value!==$('passwordConfirm').value){message('교사 비밀번호 확인 값이 다릅니다.');return}authBusy=true;controls();let error=null;const email=$('email').value.trim(),password=$('password').value;pendingName=$('displayName').value.trim();
+ try{if(signup){if(auth.currentUser?.isAnonymous)await linkWithCredential(auth.currentUser,EmailAuthProvider.credential(email,password));else await createUserWithEmailAndPassword(auth,email,password)}else await signInWithEmailAndPassword(auth,email,password);await auth.currentUser.getIdToken(true);setMode(false)}catch(e){error=e}finally{authBusy=false;$('password').value=$('passwordConfirm').value='';await load(auth.currentUser);if(error)message(accountError(error));controls()}};
+$('resetPassword').onclick=async()=>{if(authBusy)return;const email=$('email').value.trim();if(!email||!$('email').checkValidity()){message('아이디 칸에 이메일 주소를 입력해 주세요.');$('email').focus();return}authBusy=true;controls();try{await sendPasswordResetEmail(auth,email);message('등록된 계정이면 비밀번호 재설정 메일을 받을 수 있습니다. 메일함을 확인해 주세요.')}catch(e){message(accountError(e))}finally{authBusy=false;controls()}};
+$('logout').onclick=async()=>{if(busy||authBusy)return;authBusy=true;controls();try{await signOut(auth);await load(null)}catch{message('로그아웃하지 못했습니다. 다시 시도해 주세요.')}finally{authBusy=false;controls()}};
+for(let i=1;i<=20;i++)$('newClass').append(new Option(i+'반',String(i)));
+$('createForm').onsubmit=async e=>{e.preventDefault();if(busy||!ready||!$('createForm').reportValidity())return;const classId=$('newGrade').value+'-'+$('newClass').value;if(classes.some(c=>c.classId===classId)){message('이미 있는 반입니다. 표에서 번호를 변경하거나 보관한 반을 복원해 주세요.');return}const ticket=epoch;busy=true;controls();try{await createClass(db,user.uid,{classId,label:$('newLabel').value.trim()||classId,pin:$('newPin').value});if(ticket!==epoch)return;$('newPin').value='';$('newLabel').value='';await refreshClasses();message(classId+' 반을 추가했습니다. 학생 링크를 복사해 안내하세요.')}catch{if(ticket===epoch)message('반을 추가하지 못했습니다. 같은 반이 이미 있는지와 연결 상태를 확인해 주세요.')}finally{busy=false;controls()}};
+$('pinForm').onsubmit=async e=>{e.preventDefault();if(busy||!ready||!$('pinForm').reportValidity())return;const changes=classes.filter(i=>!i.archived).map(item=>{const row=rows.get(item.key);return {item,pin:row.pin.value,label:row.label.value,enabled:row.enabled.checked,archived:false}}).filter(c=>c.pin||c.label!==c.item.label||c.enabled!==c.item.enabled);if(!changes.length){message('변경할 반의 이름·번호·입장 설정을 입력해 주세요.');return}if(changes.some(c=>c.item.configured===false&&!c.pin)){message('처음 설정하는 반은 숫자 4자리 번호도 입력해 주세요.');return}const ticket=epoch;busy=true;controls();try{await saveClassChanges(db,user.uid,changes);if(ticket!==epoch)return;await refreshClasses();message(changes.length+'개 반 설정을 저장했습니다.')}catch{if(ticket===epoch)message('저장하지 못했습니다. 입력값은 유지됩니다. 연결 상태를 확인하고 다시 시도해 주세요.')}finally{busy=false;controls()}};
+async function archive(item){if(busy||!ready)return;if(!confirm(item.archived?'이 반을 복원할까요? 입장은 설정에서 다시 허용할 수 있습니다.':item.legacy?'이 반의 새 학생 입장을 중지할까요? 작품은 유지합니다.':'이 반을 보관할까요? 새 입장을 막고 작품은 유지합니다.'))return;const ticket=epoch;busy=true;controls();try{await saveClassChanges(db,user.uid,[{item,pin:'',label:item.label,enabled:false,archived:item.legacy?false:!item.archived}]);if(ticket!==epoch)return;await refreshClasses();message('반 설정을 변경했습니다. 작품은 보존됩니다.')}catch{if(ticket===epoch)message('반 설정을 변경하지 못했습니다.')}finally{busy=false;controls()}}
+$('showArchived').onchange=()=>{for(const item of classes)rows.get(item.key).tr.hidden=item.archived&&!$('showArchived').checked};
+async function loadArt(append=false){const item=classes.find(c=>c.key===$('artClass').value);if(!ready||!item)return;const ticket=++artEpoch,owner=user.uid;if(!append){cursor=null;artworks=[];$('artGrid').replaceChildren()}artBusy=true;controls();try{const result=await listArtworks(db,owner,item,append?cursor:null);if(ticket!==artEpoch||user?.uid!==owner)return;artworks=[...new Map([...artworks,...result.items].map(d=>[d.id,d])).values()];cursor=result.cursor;$('moreArt').hidden=!result.more;renderArt(item)}catch{if(ticket===artEpoch)message('작품을 불러오지 못했습니다. 연결 상태를 확인해 주세요.')}finally{if(ticket===artEpoch){artBusy=false;controls()}}}
+function renderArt(item){$('artGrid').replaceChildren();if(!artworks.length){$('artGrid').append(text('p','아직 게시된 작품이 없습니다.','small'));return}for(const work of artworks){const card=document.createElement('article');card.className='art-card';card.append(text('span',work.hidden?'갤러리 숨김':'전시 중','badge'),text('h3',work.title||'제목 없음'),text('p',work.nickname||'학생'),text('p',(work.work?.artist||'')+' · '+(work.work?.title||''),'small'));const actions=document.createElement('div');actions.className='actions';actions.append(manage('감상문 보기',()=>{$('artTitle').textContent=work.title||'작품';$('artInfo').textContent=item.classId+' · '+(work.nickname||'학생');$('artStory').textContent=work.story||'';$('artDialog').showModal()}),manage(work.hidden?'다시 전시':'갤러리 숨김',async()=>{if(busy||!ready)return;const ticket=epoch;busy=true;controls();try{await setArtworkHidden(db,user.uid,item,work.id,!work.hidden);if(ticket===epoch){message('작품 전시 상태를 변경했습니다.');await loadArt()}}catch{if(ticket===epoch)message('전시 상태를 변경하지 못했습니다.')}finally{busy=false;controls()}}));card.append(actions);$('artGrid').append(card)}controls()}
+$('artClass').onchange=()=>loadArt();$('reloadArt').onclick=()=>loadArt();$('moreArt').onclick=()=>loadArt(true);$('closeArt').onclick=()=>$('artDialog').close();

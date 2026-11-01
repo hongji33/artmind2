@@ -11,9 +11,8 @@ service cloud.firestore {
     // 교사가 승인한 학생인지 확인
     function member() {
       return signedIn()
-        && exists(
-          /databases/$(database)/documents/artmind2_members/$(request.auth.uid)
-        );
+        && exists(/databases/$(database)/documents/artmind2_members/$(request.auth.uid))
+        && get(/databases/$(database)/documents/artmind2_members/$(request.auth.uid)).data.get('teacherId', '') == '';
     }
 
     // 승인된 학생의 학급
@@ -46,7 +45,8 @@ service cloud.firestore {
           'title',
           'story',
           'work',
-          'updatedAt'
+          'updatedAt',
+          'hidden'
         ])
         && request.resource.data.keys().hasAll([
           'owner',
@@ -64,7 +64,8 @@ service cloud.firestore {
         && request.resource.data.title.size() <= 100
         && request.resource.data.story is string
         && request.resource.data.story.size() <= 3000
-        && request.resource.data.work is map;
+        && request.resource.data.work is map
+        && request.resource.data.get('hidden', false) is bool;
     }
 
     // 반 비밀번호 입장 및 담당 교사의 비밀번호 관리
@@ -79,7 +80,8 @@ service cloud.firestore {
      allow list, create, update, delete: if false;
     }
     match /artmind2_class_access/{classId} {
-     allow read, delete: if false;
+     allow get: if teacherFor(classId);
+     allow list, delete: if false;
      allow create, update: if teacherFor(classId)
       && classId.matches('[1-3]-([1-9]|1[0-9]|20)')
       && request.resource.data.keys().hasAll(['enabled','passwordHash'])
@@ -103,13 +105,24 @@ service cloud.firestore {
      function self() { return request.auth != null && request.auth.uid == uid; }
      function validEntry() {
       let d = request.resource.data;
-      let c = get(/databases/$(database)/documents/artmind2_class_access/$(d.classId)).data;
+      let teacher = d.get('teacherId', '');
       return d.keys().hasAll(['classId','nickname','passwordProof','joinedAt'])
-       && d.keys().hasOnly(['classId','nickname','passwordProof','joinedAt'])
+       && d.keys().hasOnly(['classId','nickname','passwordProof','joinedAt','teacherId'])
        && d.classId is string && d.classId.matches('[1-3]-([1-9]|1[0-9]|20)')
        && d.nickname is string && d.nickname.size() > 0 && d.nickname.size() <= 20
        && d.passwordProof is string && d.passwordProof.matches('[a-f0-9]{64}')
-       && d.joinedAt == request.time && c.enabled == true && d.passwordProof == c.passwordHash;
+       && d.joinedAt == request.time && teacher is string
+       && (teacher == '' ? validLegacyEntry(d) : validSpaceEntry(teacher, d));
+     }
+     function validLegacyEntry(d) {
+      let c = get(/databases/$(database)/documents/artmind2_class_access/$(d.classId)).data;
+      return c.enabled == true && d.passwordProof == c.passwordHash;
+     }
+     function validSpaceEntry(teacher, d) {
+      let c = get(/databases/$(database)/documents/artmind2_spaces/$(teacher)/private_classes/$(d.classId)).data;
+      let p = get(/databases/$(database)/documents/artmind2_spaces/$(teacher)/classes/$(d.classId)).data;
+      return teacher.matches('[A-Za-z0-9_-]{1,128}') && c.enabled == true
+       && p.enabled == true && p.archived == false && d.passwordProof == c.passwordHash;
      }
      allow get: if self();
      allow list: if false;
@@ -125,25 +138,30 @@ service cloud.firestore {
     match /artmind2_exhibits/{exhibitId} {
 
       // 같은 반 전시만 열람
-      allow get, list: if member()
-        && resource.data.classId == myClass();
+      allow get, list: if (member() && resource.data.classId == myClass())
+        || teacherFor(resource.data.classId);
 
       // 자신의 전시만 새로 만들기
       allow create: if member()
         && request.auth.uid == exhibitId
         && request.resource.data.owner == request.auth.uid
         && request.resource.data.classId == myClass()
-        && validExhibit();
+        && validExhibit()
+        && request.resource.data.get('hidden', false) == false;
 
       // 자신의 전시만 수정
       // 작성자와 학급은 변경 불가
-      allow update: if member()
+      allow update: if (member()
         && request.auth.uid == exhibitId
         && resource.data.owner == request.auth.uid
         && resource.data.classId == myClass()
         && request.resource.data.owner == resource.data.owner
         && request.resource.data.classId == resource.data.classId
-        && validExhibit();
+        && request.resource.data.get('hidden', false) == resource.data.get('hidden', false)
+        && validExhibit())
+        || (teacherFor(resource.data.classId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['hidden'])
+          && request.resource.data.hidden is bool);
 
       // 학생이 전시를 삭제하는 것은 제한
       allow delete: if false;
@@ -199,6 +217,133 @@ service cloud.firestore {
           && request.resource.data.classId == myClass();
 
         allow update, delete: if false;
+      }
+    }
+
+    // Password-based teacher accounts own their individual spaces.
+    function passwordAccount() {
+      return signedIn() && request.auth.token.firebase.sign_in_provider == 'password';
+    }
+    function ownTeacher(teacherId) {
+      return passwordAccount() && request.auth.uid == teacherId
+        && exists(/databases/$(database)/documents/artmind2_teacher_profiles/$(teacherId));
+    }
+    match /artmind2_teacher_profiles/{uid} {
+      allow get: if signedIn() && request.auth.uid == uid;
+      allow list, delete: if false;
+      allow create: if passwordAccount() && request.auth.uid == uid
+        && request.resource.data.keys().hasAll(['displayName', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['displayName', 'createdAt'])
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() > 0 && request.resource.data.displayName.size() <= 40
+        && request.resource.data.createdAt == request.time;
+      allow update: if passwordAccount() && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName'])
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() > 0 && request.resource.data.displayName.size() <= 40;
+    }
+    function spaceMember(teacherId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/artmind2_members/$(request.auth.uid))
+        && get(/databases/$(database)/documents/artmind2_members/$(request.auth.uid)).data.get('teacherId', '') == teacherId;
+    }
+    function sameSpaceExhibit(teacherId, exhibitId) {
+      let path = /databases/$(database)/documents/artmind2_spaces/$(teacherId)/exhibits/$(exhibitId);
+      return spaceMember(teacherId) && exists(path) && get(path).data.classId == myClass();
+    }
+    match /artmind2_spaces/{teacherId} {
+      allow read, write: if false;
+      match /classes/{classId} {
+        allow get: if signedIn();
+        allow list: if ownTeacher(teacherId);
+        allow create, update: if ownTeacher(teacherId)
+          && classId.matches('[1-3]-([1-9]|1[0-9]|20)')
+          && request.resource.data.keys().hasAll(['classId','label','salt','iterations','enabled','archived'])
+          && request.resource.data.keys().hasOnly(['classId','label','salt','iterations','enabled','archived'])
+          && request.resource.data.classId == classId
+          && request.resource.data.label is string
+          && request.resource.data.label.size() > 0 && request.resource.data.label.size() <= 60
+          && request.resource.data.salt is string && request.resource.data.salt.matches('[a-f0-9]{32}')
+          && request.resource.data.iterations == 210000
+          && request.resource.data.enabled is bool && request.resource.data.archived is bool
+          && (!request.resource.data.archived || request.resource.data.enabled == false);
+        allow delete: if false;
+      }
+      match /private_classes/{classId} {
+        allow read, delete: if false;
+        allow create, update: if ownTeacher(teacherId)
+          && classId.matches('[1-3]-([1-9]|1[0-9]|20)')
+          && request.resource.data.keys().hasAll(['enabled','passwordHash'])
+          && request.resource.data.keys().hasOnly(['enabled','passwordHash'])
+          && request.resource.data.enabled is bool
+          && request.resource.data.passwordHash is string && request.resource.data.passwordHash.matches('[a-f0-9]{64}');
+      }
+      match /exhibits/{exhibitId} {
+        allow get, list: if ownTeacher(teacherId) || (spaceMember(teacherId) && resource.data.classId == myClass());
+        allow create: if spaceMember(teacherId) && request.auth.uid == exhibitId
+          && request.resource.data.owner == request.auth.uid
+          && request.resource.data.classId == myClass() && validExhibit()
+          && request.resource.data.get('hidden', false) == false;
+        allow update: if (spaceMember(teacherId) && request.auth.uid == exhibitId
+          && resource.data.owner == request.auth.uid && resource.data.classId == myClass()
+          && request.resource.data.owner == resource.data.owner && request.resource.data.classId == resource.data.classId
+          && request.resource.data.get('hidden', false) == resource.data.get('hidden', false) && validExhibit())
+          || (ownTeacher(teacherId)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['hidden'])
+            && request.resource.data.hidden is bool);
+        allow delete: if false;
+      // 친구의 응원 댓글
+      match /comments/{commentId} {
+
+        allow get, list: if ownTeacher(teacherId) || sameSpaceExhibit(teacherId, exhibitId);
+
+        allow create: if sameSpaceExhibit(teacherId, exhibitId)
+          && request.resource.data.keys().hasOnly([
+            'uid',
+            'classId',
+            'nickname',
+            'text',
+            'createdAt'
+          ])
+          && request.resource.data.keys().hasAll([
+            'uid',
+            'classId',
+            'nickname',
+            'text'
+          ])
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.classId == myClass()
+          && request.resource.data.nickname is string
+          && request.resource.data.nickname.size() <= 30
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 500;
+
+        allow update, delete: if false;
+      }
+
+      // 친구 작품 좋아요
+      match /likes/{uid} {
+
+        allow get, list: if ownTeacher(teacherId) || sameSpaceExhibit(teacherId, exhibitId);
+
+        // 한 학생당 전시별 좋아요 하나
+        allow create: if sameSpaceExhibit(teacherId, exhibitId)
+          && uid == request.auth.uid
+          && request.resource.data.keys().hasOnly([
+            'uid',
+            'classId',
+            'createdAt'
+          ])
+          && request.resource.data.keys().hasAll([
+            'uid',
+            'classId'
+          ])
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.classId == myClass();
+
+        allow update, delete: if false;
+      }
       }
     }
   }
