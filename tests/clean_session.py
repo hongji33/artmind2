@@ -16,7 +16,7 @@ async def main():
   await page.reload();await page.wait_for_function('!document.querySelector("#lessonLogout").hidden');assert await page.locator('#lessonLoginForm').is_hidden();assert await page.locator('#exTitle').input_value()=='';assert await page.locator('#exIntent').input_value()=='';assert await page.evaluate("localStorage.getItem('maeum-v1')") is None
   await logout(page)
   await page.select_option('#loginGrade','1');await page.select_option('#loginClass','1');await page.fill('#loginNickname','다음학생');await page.fill('#loginPassword','1111');await page.click('#lessonLogin');await page.wait_for_function('!document.querySelector("#lessonLogin").disabled');await page.locator('button[data-pick]').first.click();await page.locator('[data-page="exhibition"]').click();await page.fill('#exIntent','새 감상')
-  await page.evaluate("window.dispatchEvent(new PageTransitionEvent('pageshow',{persisted:true}))");assert await page.locator('#exIntent').input_value()==''
+  await page.evaluate("window.dispatchEvent(new PageTransitionEvent('pageshow',{persisted:true}))");assert await page.locator('#exIntent').input_value()=='';assert await page.locator('#exGrade').input_value()=='1';assert await page.locator('#exNickname').input_value()=='다음학생'
   await logout(page)
   await page.select_option('#loginGrade','1');await page.select_option('#loginClass','1');await page.fill('#loginNickname','둘째학생');await page.fill('#loginPassword','1111');await page.click('#lessonLogin');await page.wait_for_function('!document.querySelector("#lessonLogin").disabled');await page.locator('button[data-pick]').first.click();await page.locator('[data-page="exhibition"]').click();await page.fill('#exIntent','둘째학생의 감상')
   await logout(page)
