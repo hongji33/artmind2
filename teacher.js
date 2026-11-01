@@ -3,7 +3,7 @@ import {getAuth,onAuthStateChanged,signOut,EmailAuthProvider,linkWithCredential,
 import {getFirestore} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import {hasPendingPresenceSync,retryPresenceSync,clearPresenceSync} from './presence-service.mjs';
 import {profile,listClasses,createClass,saveClassChanges,listArtworks,setArtworkHidden} from './teacher-data.mjs';
-import {studentLink} from './workspace-paths.mjs';
+import {studentLink} from './workspace-paths.mjs?v=classmates-3';
 const config={apiKey:'AIzaSyCMOfNf_Klgklok0vWYnOwnfOIMw2ixtoQ',authDomain:'artmind2-2edd4.firebaseapp.com',projectId:'artmind2-2edd4',storageBucket:'artmind2-2edd4.firebasestorage.app',messagingSenderId:'733626442696',appId:'1:733626442696:web:e9ad3e3ba86bd3a90796fd'};
 const app=initializeApp(config,'artmind-teacher'),auth=getAuth(app),db=getFirestore(app),$=id=>document.getElementById(id);
 let user=null,classes=[],epoch=0,artEpoch=0,authBusy=false,busy=false,ready=false,signup=false,pendingName='',artBusy=false,cursor=null,artworks=[];const rows=new Map();

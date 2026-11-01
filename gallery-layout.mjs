@@ -48,3 +48,13 @@ export function standingPosition(id,bench,preferred){
  }
  return null;
 }
+
+// Select an unoccupied, walkable arrival point instead of stacking every student.
+export function classmateEntryPosition(id,uid,peers=[]){
+ const spawn=rooms[id].spawn,candidates=[];let hash=0;for(const c of String(uid))hash=(Math.imul(hash,31)+c.charCodeAt(0))>>>0;
+ for(let y=.7;y<10;y+=.9)for(let x=.7;x<12;x+=.9)if(canStand(id,x,y))candidates.push({x,y});
+ candidates.sort((a,b)=>Math.hypot(a.x-spawn.x,a.y-spawn.y)-Math.hypot(b.x-spawn.x,b.y-spawn.y));
+ const nearby=candidates.slice(0,40),start=hash%nearby.length;
+ for(let i=0;i<nearby.length;i++){const point=nearby[(start+i)%nearby.length];if(peers.every(p=>Math.hypot(p.x-point.x,p.y-point.y)>=.85))return point;}
+ return candidates.find(point=>peers.every(p=>Math.hypot(p.x-point.x,p.y-point.y)>=.85))||{...spawn};
+}
