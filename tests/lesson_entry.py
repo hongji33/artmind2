@@ -20,6 +20,7 @@ async def main():
   assert await page.locator('#lessonReturnGallery').is_hidden();assert await page.locator('#lessonEnterGallery').count()==0;assert await page.locator('#lessonLoginShortcut').is_hidden()
   assert await page.locator('#exGrade').input_value()=='1';assert await page.locator('#exClass').input_value()=='1';assert await page.locator('#exNickname').input_value()=='푸른별'
   await page.evaluate('window.scrollTo(0,0)');await page.screenshot(path='work/lesson-entry.png')
+  await page.locator('[data-page="exhibition"]').first.click();assert await page.locator('.exhibition-empty').is_visible();assert await page.locator('#exIntent').is_hidden();assert await page.locator('#onlineGallery').is_hidden();assert await page.locator('.exhibition-empty').evaluate('(el)=>el.getBoundingClientRect().height')<250;await page.screenshot(path='work/tidy-empty-appreciation.png');await page.locator('.exhibition-empty [data-page="explore"]').click()
   # Existing artwork selection and the local appreciation flow remain available.
   pick=page.locator('button[data-pick]').first
   assert await pick.count()==1
