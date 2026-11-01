@@ -2,6 +2,7 @@
 import asyncio,threading
 from http.server import ThreadingHTTPServer,SimpleHTTPRequestHandler
 from playwright.async_api import async_playwright
+from image_fixture import PNG
 from class_mock import MOCK
 class Quiet(SimpleHTTPRequestHandler):
  def log_message(self,*args):pass
@@ -13,7 +14,7 @@ async def visible_art(page,side_by_side=True):
 async def main():
  async with async_playwright() as p:
   browser=await p.chromium.launch(executable_path='/usr/bin/chromium',args=['--no-sandbox']);page=await browser.new_page(viewport={'width':1366,'height':768});errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
-  await page.route('**/*',lambda r:r.fulfill(content_type='text/javascript',body=MOCK) if 'www.gstatic.com/firebasejs/' in r.request.url else r.continue_() if r.request.url.startswith('http://127.0.0.1:8887') else r.abort())
+  await page.route('**/*',lambda r:r.fulfill(content_type='image/png',body=PNG) if r.request.resource_type=='image' else r.fulfill(content_type='text/javascript',body=MOCK) if 'www.gstatic.com/firebasejs/' in r.request.url else r.continue_() if r.request.url.startswith('http://127.0.0.1:8887') else r.abort())
   await page.goto('http://127.0.0.1:8887/index.html');await page.evaluate("document.documentElement.style.scrollBehavior='auto'")
   await page.select_option('#loginGrade','3');await page.select_option('#loginClass','1');await page.fill('#loginNickname','작품보며쓰기');await page.fill('#loginPassword','1111');await page.click('#lessonLogin');await page.wait_for_function('document.querySelector("#lessonLoginForm").hidden')
   await page.locator('button[data-pick]').first.click();await page.click('#startBtn');await page.wait_for_selector('#artworkReference .mind-art-image');await page.locator('[data-mind-element="color"]').click();await page.fill('#mind-color','밝은 색을 관찰했어요.')
