@@ -1,0 +1,18 @@
+import test from 'node:test';import {readFile} from 'node:fs/promises';
+import {initializeTestEnvironment,assertFails,assertSucceeds} from '@firebase/rules-unit-testing';
+import {doc,setDoc,getDoc,getDocs,collection,serverTimestamp,updateDoc} from 'firebase/firestore';
+import {derivePasswordProof} from '../password-crypto.mjs';
+test('personal PIN records teacher-only; drafts self-owned; same UID renews class membership',async()=>{
+ const env=await initializeTestEnvironment({projectId:'demo-personal-artmind',firestore:{host:'127.0.0.1',port:8086,rules:await readFile(new URL('../firestore.rules',import.meta.url),'utf8')}});
+ try{
+  const dbFor=(uid,email)=>env.authenticatedContext(uid,{email,firebase:{sign_in_provider:'password'}}).firestore(),a=dbFor('TeacherA','a@example.com'),b=dbFor('TeacherB','b@example.com'),s=dbFor('student','student@example.invalid'),other=dbFor('other','other@example.invalid');
+  const salt='0123456789abcdef0123456789abcdef',proof=await derivePasswordProof('1111',salt);
+  await env.withSecurityRulesDisabled(async context=>{const db=context.firestore();for(const uid of ['TeacherA','TeacherB'])await setDoc(doc(db,'artmind2_teacher_profiles',uid),{displayName:uid,createdAt:serverTimestamp()});await setDoc(doc(db,'artmind2_spaces/TeacherA/classes/3-1'),{classId:'3-1',label:'3-1',salt,iterations:210000,enabled:true,archived:false});await setDoc(doc(db,'artmind2_spaces/TeacherA/private_classes/3-1'),{enabled:true,passwordHash:proof});for(const [uid,nickname]of [['student','별'],['other','달']])await setDoc(doc(db,'artmind2_members',uid),{classId:'3-1',nickname,teacherId:'TeacherA',joinedAt:serverTimestamp()})});
+  const account={uid:'student',classId:'3-1',nickname:'별',email:'student@example.invalid',pin:'123456',updatedAt:serverTimestamp()},path='artmind2_spaces/TeacherA/student_accounts/student';
+  await assertSucceeds(setDoc(doc(s,path),account));await assertSucceeds(getDoc(doc(a,path)));await assertSucceeds(getDocs(collection(a,'artmind2_spaces/TeacherA/student_accounts')));await assertFails(getDoc(doc(s,path)));await assertFails(getDoc(doc(other,path)));await assertFails(getDoc(doc(b,path)));await assertFails(setDoc(doc(other,path),account));await assertFails(setDoc(doc(s,'artmind2_spaces/TeacherB/student_accounts/student'),account));
+  await assertFails(updateDoc(doc(s,path),{pin:'000000',updatedAt:serverTimestamp()}));await assertSucceeds(updateDoc(doc(s,path),{pin:'123456',updatedAt:serverTimestamp()}));
+  await assertSucceeds(updateDoc(doc(a,path),{pendingPin:'654321',updatedAt:serverTimestamp()}));await assertFails(updateDoc(doc(b,path),{pin:'654321',updatedAt:serverTimestamp()}));await assertFails(updateDoc(doc(a,path),{classId:'3-2',updatedAt:serverTimestamp()}));
+  const draft={uid:'student',classId:'3-1',nickname:'별',activity:{title:'내 감상문',intent:'관찰한 내용'},updatedAt:serverTimestamp()},draftPath='artmind2_spaces/TeacherA/student_drafts/student';await assertSucceeds(setDoc(doc(s,draftPath),draft));await assertSucceeds(getDoc(doc(s,draftPath)));await assertFails(getDoc(doc(a,draftPath)));await assertFails(getDoc(doc(other,draftPath)));await assertFails(getDoc(doc(b,draftPath)));await assertFails(setDoc(doc(other,draftPath),draft));
+  const entry={classId:'3-1',nickname:'별',teacherId:'TeacherA',passwordProof:proof,joinedAt:serverTimestamp()};await assertSucceeds(setDoc(doc(s,'artmind2_members/student'),entry));await assertFails(setDoc(doc(s,'artmind2_members/student'),{...entry,nickname:'다른별'}));await assertFails(setDoc(doc(s,'artmind2_members/student'),{...entry,passwordProof:'0'.repeat(64)}));
+ }finally{await env.cleanup()}
+});

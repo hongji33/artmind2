@@ -3,7 +3,7 @@ import asyncio,threading
 from http.server import ThreadingHTTPServer,SimpleHTTPRequestHandler
 from playwright.async_api import async_playwright
 from image_fixture import PNG
-from class_mock import MOCK
+from account_mock import MOCK
 class Quiet(SimpleHTTPRequestHandler):
  def log_message(self,*args):pass
 server=ThreadingHTTPServer(('127.0.0.1',8887),Quiet);threading.Thread(target=server.serve_forever,daemon=True).start()
@@ -15,8 +15,8 @@ async def main():
  async with async_playwright() as p:
   browser=await p.chromium.launch(executable_path='/usr/bin/chromium',args=['--no-sandbox']);page=await browser.new_page(viewport={'width':1366,'height':768});errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
   await page.route('**/*',lambda r:r.fulfill(content_type='image/png',body=PNG) if r.request.resource_type=='image' else r.fulfill(content_type='text/javascript',body=MOCK) if 'www.gstatic.com/firebasejs/' in r.request.url else r.continue_() if r.request.url.startswith('http://127.0.0.1:8887') else r.abort())
-  await page.goto('http://127.0.0.1:8887/index.html');await page.evaluate("document.documentElement.style.scrollBehavior='auto'")
-  await page.select_option('#loginGrade','3');await page.select_option('#loginClass','1');await page.fill('#loginNickname','작품보며쓰기');await page.fill('#loginPassword','1111');await page.click('#lessonLogin');await page.wait_for_function('document.querySelector("#lessonLoginForm").hidden')
+  await page.add_init_script("localStorage.setItem('mock-cloud',JSON.stringify({accounts:{},sequence:0,records:{'artmind2_spaces/TeacherA/classes/3-1':{classId:'3-1',label:'3-1',salt:'0123456789abcdef0123456789abcdef',iterations:210000,enabled:true,archived:false}}}))");await page.goto('http://127.0.0.1:8887/index.html?teacher=TeacherA&class=3-1');await page.evaluate("document.documentElement.style.scrollBehavior='auto'")
+  await page.select_option('#loginGrade','3');await page.select_option('#loginClass','1');await page.fill('#loginNickname','작품보며쓰기');await page.fill('#loginPassword','1111');await page.select_option('#studentAccountMode','register');await page.fill('#studentPin','123456');await page.fill('#studentPinConfirm','123456');await page.click('#lessonLogin');await page.wait_for_function('document.querySelector("#lessonLoginForm").hidden')
   await page.locator('button[data-pick]').first.click();await page.click('#startBtn');await page.wait_for_selector('#artworkReference .mind-art-image');await page.locator('[data-mind-element="color"]').click();await page.fill('#mind-color','밝은 색을 관찰했어요.')
   await page.locator('[data-mind-tab="1"]').first.click();await page.fill('#mindFeeling','따뜻한 느낌이 들어요.');await page.locator('[data-mind-tab="2"]').first.click();await page.fill('#mindReflect','작품을 보며 나의 경험을 쓰고 있어요.');await visible_art(page)
   await page.locator('#exIntent').scroll_into_view_if_needed();await page.fill('#exIntent','마지막 감상문을 쓰는 동안에도 그림이 보여요.');await visible_art(page);await page.screenshot(path='work/sticky-artwork-desktop.png')

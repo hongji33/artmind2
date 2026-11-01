@@ -24,7 +24,7 @@ import {connectPresence,observePresence,realtimeConfigured,watchGalleryLayout} f
 import {GREETINGS,roomPeers,GREETING_COOLDOWN} from './presence-core.mjs?v=designs-1';
 import {drawPerson,avatarOptions,avatarLabels,defaultAppearance,normalizeAppearance} from './avatar-renderer.mjs';
 import {artworkImages} from './artwork-map.js';
-import {exhibitSegments,studentLink} from './workspace-paths.mjs?v=classmates-4';
+import {exhibitSegments,studentLink,APP_VERSION} from './workspace-paths.mjs?v=personal-accounts-1';
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
 import {getAuth,onAuthStateChanged,signInAnonymously,signOut} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import {getFirestore,doc,getDoc,collection,query,where,limit,getDocs,addDoc,setDoc,serverTimestamp} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
@@ -253,7 +253,7 @@ let galleryPresenceHost=new URLSearchParams(location.search).get('host')||entryP
 async function handleAuth(u){
  const epoch=++authEpoch;user=!signedOut&&u&&(teacherView||entryProof()?.uid===u.uid)?u:null;clearStudentView();authControls();
  if(teacherView){
-  const back=document.querySelector('header a');back.href='./teacher.html';back.textContent='← 교사 관리로 돌아가기';$('login').textContent='교사 로그인';$('like').hidden=$('send').hidden=$('commentText').hidden=true;
+  const back=document.querySelector('header a');back.href='./teacher.html?v=personal-accounts-1';back.textContent='← 교사 관리로 돌아가기';$('login').textContent='교사 로그인';$('like').hidden=$('send').hidden=$('commentText').hidden=true;
   if(!user){text('identity','교사 로그인이 필요합니다.');text('status','교사 관리에서 로그인한 뒤 해당 반 미술관 보기를 눌러 주세요.');return}
   const params=new URLSearchParams(location.search);if(params.get('teacher')!==user.uid){text('status','본인 담당 반의 미술관만 열 수 있습니다.');return}
   try{const {listClasses}=await import('./teacher-data.mjs?v=one-gallery-1');const classes=await listClasses(db,user.uid);if(epoch!==authEpoch)return;const item=classes.find(c=>c.classId===params.get('class'));if(!item){text('status','담당 반을 찾을 수 없습니다. 교사 관리에서 다시 열어 주세요.');return}
@@ -270,11 +270,11 @@ async function handleAuth(u){
   if(!member){text('roomTitle','반 비밀번호 로그인 후 입장 가능');text('status','학생 로그인에서 학반·닉네임·반 비밀번호를 입력해 주세요.');draw();return}
   galleryTeacherContext=member.teacherId||'';
   galleryPresenceHost=member.teacherId||entryProof()?.presenceHost||galleryPresenceHost;
-  const back=document.querySelector('header a');if((member.teacherId||galleryPresenceHost)&&back){const target=new URL('./index.html',location.href);if(member.teacherId)target.searchParams.set('teacher',member.teacherId);else target.searchParams.set('host',galleryPresenceHost);back.href=target.href}
+  const back=document.querySelector('header a');if((member.teacherId||galleryPresenceHost)&&back){const target=new URL('./index.html',location.href);target.searchParams.set('v',APP_VERSION);if(member.teacherId)target.searchParams.set('teacher',member.teacherId);else target.searchParams.set('host',galleryPresenceHost);back.href=target.href}
   await load();if(epoch===authEpoch&&!signedOut)startLive();
  }catch(e){if(epoch!==authEpoch||signedOut)return;text('identity','학생 정보 확인 실패');text('status','회원 확인 실패: '+e.message)}
 }
-function loginStudent(){if(teacherView){location.assign('./teacher.html');return}const target=new URL('./index.html',location.href);if(galleryTeacherContext)target.searchParams.set('teacher',galleryTeacherContext);else if(galleryPresenceHost)target.searchParams.set('host',galleryPresenceHost);location.assign(target.href)}
+function loginStudent(){if(teacherView){location.assign('./teacher.html?v=personal-accounts-1');return}const target=new URL('./index.html',location.href);target.searchParams.set('v',APP_VERSION);if(galleryTeacherContext)target.searchParams.set('teacher',galleryTeacherContext);else if(galleryPresenceHost)target.searchParams.set('host',galleryPresenceHost);location.assign(target.href)}
 $('login').onclick=loginStudent;
 $('logout').onclick=async()=>{
  if(authBusy||!user)return;const previousProof=entryProof();
