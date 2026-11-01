@@ -12,14 +12,20 @@ async def main():
   await page.add_init_script("localStorage.setItem('artmind-gallery-signed-out-v1','student-marker')")
   await page.route('**/*',lambda r:r.fulfill(content_type='text/javascript',body=MOCK) if 'www.gstatic.com/firebasejs/' in r.request.url else r.continue_() if r.request.url.startswith('http://127.0.0.1:8885') else r.abort())
   await page.goto('http://127.0.0.1:8885/teacher.html');await page.wait_for_function('window.appName===\"artmind-teacher\"');await page.click('#connect');assert await page.locator('#settings').evaluate('(el)=>el.disabled');assert 'teacher-device' in await page.locator('#teacherId').inner_text()
-  await page.evaluate('window.approved=true');await page.click('#refresh');await page.wait_for_function('!document.querySelector("#settings").disabled');assert await page.locator('#classId option').count()==3
-  await page.fill('#pin','1111');await page.fill('#pinConfirm','2222');await page.click('#save');assert '다릅니다' in await page.locator('#status').inner_text();assert await page.evaluate('window.commits||0')==0
-  for pin in ['1111','0123']:
-   await page.fill('#pin',pin);await page.fill('#pinConfirm',pin);await page.click('#save');await page.wait_for_function('!document.querySelector("#settings").disabled');assert '저장했습니다' in await page.locator('#status').inner_text()
-   saved=await page.evaluate('window.saved');assert saved[0][0]=='artmind2_class_public/3-1';assert saved[1][0]=='artmind2_class_access/3-1';salt=saved[0][1]['salt'];assert saved[1][1]['passwordHash']==hashlib.pbkdf2_hmac('sha256',pin.encode(),bytes.fromhex(salt),210000).hex();assert await page.locator('#pin').input_value()=='';assert await page.locator('#pinConfirm').input_value()==''
-  before=await page.evaluate('JSON.stringify(window.saved)');await page.evaluate('window.failSave=true');await page.fill('#pin','2222');await page.fill('#pinConfirm','2222');await page.click('#save');await page.wait_for_function('!document.querySelector("#settings").disabled');assert '저장하지 못했습니다' in await page.locator('#status').inner_text();assert await page.evaluate('JSON.stringify(window.saved)')==before
+  await page.evaluate('window.approved=true');await page.click('#refresh');await page.wait_for_function('!document.querySelector("#settings").disabled');assert await page.locator('#pinRows tr').count()==2
+  first=page.locator('[data-pin="3-1"]');second=page.locator('[data-pin="3-2"]')
+  await page.click('#save');assert '입력' in await page.locator('#status').inner_text();assert await page.evaluate('window.commits||0')==0
+  await first.fill('123');await page.click('#save');assert await page.evaluate('window.commits||0')==0
+  await first.fill('1111');await second.fill('2222');await page.locator('#showPin').uncheck();assert await first.get_attribute('type')=='password';await page.locator('#showPin').check()
+  await page.click('#save');await page.wait_for_function('!document.querySelector("#settings").disabled');assert '2개 반 비밀번호를 저장했습니다' in await page.locator('#status').inner_text();assert await page.evaluate('window.commits')==1
+  saved=await page.evaluate('window.saved');assert len(saved)==4
+  for index,(class_id,pin) in enumerate([('3-1','1111'),('3-2','2222')]):
+   public,private=saved[index*2:index*2+2];assert public[0]=='artmind2_class_public/'+class_id;assert private[0]=='artmind2_class_access/'+class_id;assert private[1]['passwordHash']==hashlib.pbkdf2_hmac('sha256',pin.encode(),bytes.fromhex(public[1]['salt']),210000).hex()
+  assert saved[0][1]['salt']!=saved[2][1]['salt'];assert await first.input_value()=='';assert await second.input_value()==''
+  await first.fill('0123');await page.locator('[aria-label="3-1 새 입장 허용"]').uncheck();await page.click('#save');await page.wait_for_function('!document.querySelector("#settings").disabled');saved=await page.evaluate('window.saved');assert len(saved)==2;assert all('/3-1' in item[0] for item in saved);assert saved[1][1]['enabled'] is False;assert saved[1][1]['passwordHash']==hashlib.pbkdf2_hmac('sha256',b'0123',bytes.fromhex(saved[0][1]['salt']),210000).hex()
+  before=await page.evaluate('JSON.stringify(window.saved)');await page.evaluate('window.failSave=true');await first.fill('3333');await second.fill('4444');await page.click('#save');await page.wait_for_function('!document.querySelector("#settings").disabled');assert '저장하지 못했습니다' in await page.locator('#status').inner_text();assert await page.evaluate('JSON.stringify(window.saved)')==before;assert await first.input_value()=='3333';assert await second.input_value()=='4444'
   assert await page.evaluate("localStorage.getItem('artmind-gallery-signed-out-v1')")=='student-marker'
   for width in [768,390]:
    await page.set_viewport_size({'width':width,'height':900});assert await page.evaluate('document.documentElement.scrollWidth<=innerWidth')
-  assert not errors,errors;await browser.close();print('PASS: teacher approval gate, assigned classes, 1111 create / 0123 change, PIN confirmation, atomic failure, credential clearing, separate app, responsive UI')
+  assert not errors,errors;await browser.close();print('PASS: teacher approval gate, assigned-class table, two PINs in one batch, blank rows unchanged, leading zeros, validation, show/hide PINs, atomic failure with retry values, separate app, responsive UI')
 asyncio.run(main())
