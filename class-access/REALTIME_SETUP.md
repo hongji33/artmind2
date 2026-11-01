@@ -57,3 +57,7 @@ python tests/browser_test.py
 ```sh
 npx --yes firebase-tools@14.22.0 emulators:exec --project demo-artmind-live --config realtime-emulator.json --only database 'npm --prefix class-access run test:realtime'
 ```
+
+## 규칙 게시 오류 수정
+
+`numChildren`은 Realtime Database 규칙에서 지원하지 않아 제거했습니다. 연결 수를 세는 사용자 정의 제한은 적용하지 않습니다. Firebase 요금제의 프로젝트 전체 동시 연결 한도는 별도로 적용됩니다. 본인 UID 쓰기, 학급 회원 읽기, 필드 검증과 인사 제한은 유지합니다. 콘솔에서 오류 없이 게시가 완료되어야 규칙 적용 완료입니다.
