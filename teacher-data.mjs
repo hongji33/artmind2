@@ -1,6 +1,6 @@
 import {doc,getDoc,setDoc,getDocs,collection,query,where,limit,startAfter,writeBatch,runTransaction,updateDoc,serverTimestamp} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import {derivePasswordProof,validClassId,ITERATIONS} from './class-access/password-crypto.mjs';
-import {syncPresenceClasses} from './presence-service.mjs';
+import {syncPresenceClasses} from './presence-service.mjs?v=one-gallery-1';
 import {classSegments,exhibitSegments} from './workspace-paths.mjs';
 async function read(promise){let timer;try{return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('read-timeout')),12000)})])}finally{clearTimeout(timer)}}
 const readDoc=(...args)=>read(getDoc(...args)),readDocs=(...args)=>read(getDocs(...args));

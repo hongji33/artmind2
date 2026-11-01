@@ -1,5 +1,5 @@
 import {databaseURL} from './realtime-config.mjs';
-import {createPresenceSession,readPeers} from './presence-core.mjs';
+import {createPresenceSession,readPeers} from './presence-core.mjs?v=designs-1';
 import {validTeacherId} from './workspace-paths.mjs';
 export const realtimeConfigured=()=>/^https:\/\/[a-z0-9-]+(?:\.[a-z0-9-]+)?\.(?:firebasedatabase\.app|firebaseio\.com)\/?$/.test(databaseURL);
 async function database(app){if(!realtimeConfigured())return null;const sdk=await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js');return {sdk,db:sdk.getDatabase(app,databaseURL)}}
@@ -40,4 +40,13 @@ export async function observePresence(app,{host,classId,uid,onPeers=()=>{},onSta
  const watchers=[sdk.onValue(sdk.ref(db,'.info/serverTimeOffset'),s=>{offset=Number(s.val())||0}),sdk.onValue(sdk.ref(db,'.info/connected'),s=>{connected=!!s.val();if(!connected){onStatus('reconnecting');onPeers([])}else if(allowed){onStatus('connected');emit()}}),sdk.onValue(sdk.ref(db,`museum_presence/${host}/${classId}`),s=>{if(closed)return;allowed=true;raw=s.val()||{};if(connected){onStatus('connected');emit()}},()=>{allowed=false;onStatus('denied');onPeers([])})];
  const timer=setInterval(emit,20000);
  return {serverNow:()=>Date.now()+offset,greetingReadyAt:()=>Infinity,greet:async()=>false,async close(){if(closed)return;closed=true;clearInterval(timer);watchers.forEach(stop=>stop());onPeers([])}};
+}
+
+export async function saveGalleryLayout(app,{host,classId,layout}){
+ if(!validTeacherId(host)||!/^([1-3])-([1-9]|1[0-9]|20)$/.test(classId)||!['open','t','u','partitions'].includes(layout))throw Error('invalid-gallery-layout');
+ const value=await database(app);if(!value)throw Error('not-configured');await value.sdk.set(value.sdk.ref(value.db,`museum_layouts/${host}/${classId}`),layout);
+}
+export async function watchGalleryLayout(app,{host,classId,onLayout=()=>{}}){
+ if(!validTeacherId(host)||!/^([1-3])-([1-9]|1[0-9]|20)$/.test(classId))return ()=>{};
+ try{const value=await database(app);if(!value)return ()=>{};return value.sdk.onValue(value.sdk.ref(value.db,`museum_layouts/${host}/${classId}`),s=>onLayout(['open','t','u','partitions'].includes(s.val())?s.val():'open'),()=>onLayout('open'))}catch{onLayout('open');return ()=>{}}
 }

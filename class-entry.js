@@ -1,6 +1,6 @@
 import {doc,getDoc,setDoc,updateDoc,deleteField,serverTimestamp} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import {derivePasswordProof,validClassId,ITERATIONS} from './class-access/password-crypto.mjs';
-import {joinPresence} from './presence-service.mjs';
+import {joinPresence} from './presence-service.mjs?v=one-gallery-1';
 import {classSegments,validTeacherId} from './workspace-paths.mjs';
 // Firestore rules verify the proof against a document that students cannot read.
 export async function enterClass(db,uid,{classId,nickname,password,teacherId='',presenceHost=''}){

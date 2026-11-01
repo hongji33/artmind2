@@ -6,7 +6,7 @@ export function initFabricStudio(onChange){
  function size(){return Math.max(12,Math.min(48,Number($('fabricScale').value)||24))}
  function apply(persist=true){
   tile=document.createElement('canvas');tile.width=tile.height=128;tile.getContext('2d').drawImage(pad,0,0,128,128);onChange(tile,size());
-  if(persist){try{localStorage.setItem('artmind-fabric-v1',JSON.stringify({data:tile.toDataURL('image/png'),scale:size()}));status('내 원단을 옷에 적용했어요. 이 기기에만 저장됩니다.')}catch{status('옷에는 적용했지만 기기에 저장하지 못했어요.')}}
+  if(persist){try{localStorage.setItem('artmind-fabric-v1',JSON.stringify({data:tile.toDataURL('image/png'),scale:size()}));status('내 원단을 적용했어요. 함께보기 연결 시 같은 반 친구에게도 보입니다.')}catch{status('옷에는 적용했지만 기기에 저장하지 못했어요.')}}
  }
  function point(e){const r=pad.getBoundingClientRect();return {x:(e.clientX-r.left)*pad.width/r.width,y:(e.clientY-r.top)*pad.height/r.height}}
  function stroke(p){ctx.lineCap=ctx.lineJoin='round';ctx.strokeStyle=$('fabricInk').value;ctx.lineWidth=Number($('fabricBrush').value)||8;ctx.beginPath();ctx.moveTo(last?.x??p.x,last?.y??p.y);ctx.lineTo(p.x+.01,p.y+.01);ctx.stroke();last=p}

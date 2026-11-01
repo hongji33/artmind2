@@ -1,9 +1,10 @@
+import {normalizeVisual} from './shared-design.mjs';
 import {normalizeAppearance} from './avatar-renderer.mjs';
 export const GREETINGS=['','안녕 👋','반가워 😊','같이 감상하자 🎨','멋진 작품이야 ✨'];
 export const POSITION_INTERVAL=1200,HEARTBEAT_INTERVAL=20000,STALE_AFTER=90000,GREETING_COOLDOWN=5000;
 export function safeState(value={}){
- if(!Number.isFinite(value.x)||!Number.isFinite(value.y)||value.x<0||value.x>12||value.y<0||value.y>10||!Number.isInteger(value.roomId)||value.roomId<0||value.roomId>3)throw Error('invalid-position');
- return {x:Math.round(value.x*1000)/1000,y:Math.round(value.y*1000)/1000,roomId:value.roomId,page:value.roomId===3?Math.max(0,Math.min(5,(Number.isInteger(value.page)?value.page:0))):0,facing:value.facing===-1?-1:1,back:!!value.back,seated:!!value.seated,walking:!!value.walking,appearance:normalizeAppearance(value.appearance)};
+ if(!Number.isFinite(value.x)||!Number.isFinite(value.y)||value.x<0||value.x>28||value.y<0||value.y>22||!Number.isInteger(value.roomId)||value.roomId<0||value.roomId>3)throw Error('invalid-position');
+ const visual=normalizeVisual(value.visual);return {...(visual?{visual}:{}),x:Math.round(value.x*1000)/1000,y:Math.round(value.y*1000)/1000,roomId:value.roomId,page:value.roomId===3?Math.max(0,Math.min(5,(Number.isInteger(value.page)?value.page:0))):0,facing:value.facing===-1?-1:1,back:!!value.back,seated:!!value.seated,walking:!!value.walking,appearance:normalizeAppearance(value.appearance)};
 }
 export function readPeers(raw,ownUid,now=Date.now()){
  const peers=[];
@@ -23,7 +24,7 @@ export function createPresenceSession(transport,{host,classId,uid,nickname,getSt
  async function flush(force=false){if(closed||!connected||pending)return;const time=now();if(time-lastWrite<POSITION_INTERVAL)return;
   let state;try{state=safeState(getState())}catch{return}
   const signature=JSON.stringify(state);if(!force&&!pendingGreeting&&signature===lastSignature&&time-lastWrite<HEARTBEAT_INTERVAL)return;
-  const connection=connectionGeneration;pending=true;try{const payload={...state,nickname},greeting=pendingGreeting,delta={lastSeen:transport.timestamp()};if(!lastPayload){delta.speechCode=0;delta.speechAt=0}else if(greeting){delta.speechCode=greeting.code;delta.speechAt=transport.timestamp()}for(const [key,value]of Object.entries(payload))if(!lastPayload||JSON.stringify(lastPayload[key])!==JSON.stringify(value))delta[key]=value;await transport.update(path,delta);if(!closed&&connection===connectionGeneration){lastWrite=time;lastSignature=signature;if(greeting&&lastPayload&&pendingGreeting?.sequence===greeting.sequence){pendingGreeting=null;lastGreeting=now()}lastPayload=payload;onStatus('connected')}}catch{if(!closed&&connection===connectionGeneration){connected=false;onStatus('error');onPeers([])}}finally{pending=false;if(!closed&&connected&&connection!==connectionGeneration)queueMicrotask(()=>flush(true))}
+  const connection=connectionGeneration;pending=true;try{const payload={...state,nickname},greeting=pendingGreeting,delta={lastSeen:transport.timestamp()};if(!lastPayload){delta.speechCode=0;delta.speechAt=0}else if(greeting){delta.speechCode=greeting.code;delta.speechAt=transport.timestamp()}for(const [key,value]of Object.entries(payload))if(!lastPayload||JSON.stringify(lastPayload[key])!==JSON.stringify(value))delta[key]=value;if(lastPayload?.visual&&!payload.visual)delta.visual=null;await transport.update(path,delta);if(!closed&&connection===connectionGeneration){lastWrite=time;lastSignature=signature;if(greeting&&lastPayload&&pendingGreeting?.sequence===greeting.sequence){pendingGreeting=null;lastGreeting=now()}lastPayload=payload;onStatus('connected')}}catch{if(!closed&&connection===connectionGeneration){connected=false;onStatus('error');onPeers([])}}finally{pending=false;if(!closed&&connected&&connection!==connectionGeneration)queueMicrotask(()=>flush(true))}
  }
  async function activate(){
   if(closed||!wireConnected||!accessValid||connecting||connected)return;

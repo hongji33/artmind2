@@ -5,10 +5,11 @@ from http.server import ThreadingHTTPServer,SimpleHTTPRequestHandler
 from playwright.async_api import async_playwright
 from firebase_mock import FIREBASE_MOCK
 from realtime_mock import RTDB
+from image_fixture import PNG
 class Quiet(SimpleHTTPRequestHandler):
  def log_message(self,*args):pass
 server=ThreadingHTTPServer(('127.0.0.1',8890),Quiet);threading.Thread(target=server.serve_forever,daemon=True).start()
-source=Path('metaverse.html').read_text().replace('size();draw();\n</script>', 'size();draw();window.__liveTest={player,peers:()=>[...liveFrames.values()]};\n</script>')
+source=Path('metaverse.html').read_text().replace('size();draw();\n</script>', 'size();draw();window.__liveTest={player,sharedImages,peers:()=>[...liveFrames.values()]};\n</script>')
 shared={'museum_members':{'TeacherA':{uid:{'classId':'1-1','nickname':nick,'joinedAt':int(time.time()*1000)} for uid,nick in [('studentA','별'),('studentB','달')]}}}
 pages=[];mock_sources={}
 def resolve(v):
@@ -41,12 +42,16 @@ async def main():
     if 'www.gstatic.com/firebasejs/' in url:return await r.fulfill(content_type='text/javascript',body=mock_sources[r.request.frame.page.context])
     if url.split('?')[0].endswith('/metaverse.html'):return await r.fulfill(content_type='text/html',body=source)
     return await r.continue_() if url.startswith('http://127.0.0.1:8890') else await r.abort()
-   await context.route('**/*',route);page=await context.new_page();pages.append(page);page.on('pageerror',lambda e:errors.append(str(e)));await page.goto('http://127.0.0.1:8890/metaverse.html?teacher=TeacherA&v=classmates-3');await page.wait_for_function('document.querySelector("#liveStatus").textContent.includes("인사해")')
+   await context.route('**/*',route);page=await context.new_page();pages.append(page);page.on('pageerror',lambda e:errors.append(str(e)));await page.goto('http://127.0.0.1:8890/metaverse.html?teacher=TeacherA&v=classmates-3');await page.wait_for_function('!document.querySelector("[data-greeting]").disabled')
   for page in pages:await page.wait_for_function('document.querySelector("#liveCount").textContent.includes("2명")');assert '2명' in await page.locator('#liveHudCount').inner_text()
   a,b=[await page.evaluate('({...__liveTest.player})') for page in pages];assert ((a['x']-b['x'])**2+(a['y']-b['y'])**2)**.5>=.85
+  await pages[0].locator('.customization>summary').click();await pages[0].select_option('#appearance-outfit','2');await pages[0].select_option('#appearance-color','3');await pages[1].wait_for_function('__liveTest.peers().find(p=>p.uid==="studentA")?.appearance.outfit===2&&__liveTest.peers().find(p=>p.uid==="studentA")?.appearance.color===3')
+  await pages[0].evaluate("const p=document.querySelector('#fabricPad');p.getContext('2d').fillStyle='#ff2255';p.getContext('2d').fillRect(0,0,p.width,p.height);document.querySelector('#fabricApply').click()");await pages[1].wait_for_function('__liveTest.peers().find(p=>p.uid==="studentA")?.visual?.fabric?.startsWith("data:image/")');await pages[1].wait_for_function('[...__liveTest.sharedImages.values()].some(img=>img?.complete&&img.naturalWidth>0)');await pages[1].screenshot(path='work/friend-shared-fabric.png')
+  await pages[0].set_input_files('#avatarUpload',{'name':'character.png','mimeType':'image/png','buffer':PNG});await pages[1].wait_for_function('__liveTest.peers().find(p=>p.uid==="studentA")?.visual?.avatar?.startsWith("data:image/")');await pages[1].screenshot(path='work/friend-shared-avatar.png')
+  await pages[0].click('#avatarReset');await pages[0].evaluate("document.querySelector('#fabricRemove').click()");await pages[1].wait_for_function('!__liveTest.peers().find(p=>p.uid==="studentA")?.visual');
   await pages[0].click('[data-greeting="1"]');await pages[1].wait_for_function('document.querySelector("#liveGreeting").textContent.includes("별: 안녕")');await pages[1].screenshot(path='work/two-students-connected.png')
   await pages[0].click('#scene');await pages[0].keyboard.down('ArrowLeft');await pages[0].wait_for_timeout(300);await pages[0].keyboard.up('ArrowLeft');await pages[0].wait_for_timeout(1500)
   own=await pages[0].evaluate('({...__liveTest.player})');remote=await pages[1].evaluate('__liveTest.peers().find(p=>p.uid==="studentA")');assert abs(own['x']-remote['x'])<.002
   pages[0].once('dialog',lambda d:d.accept());await pages[0].click('#logout');await pages[1].wait_for_function('document.querySelector("#liveCount").textContent.includes("1명")');assert not errors,errors
-  await browser.close();print('PASS: two isolated identities, shared transport, mutual count, separate walkable arrival, greeting, movement and logout; production backend not tested')
+  await browser.close();print('PASS: two isolated identities, shared transport, mutual count, separate walkable arrival, outfit/color, shared fabric/avatar/reset, greeting, movement and logout; production backend not tested')
 asyncio.run(main())
