@@ -1,5 +1,5 @@
 """Class-password entry integration using mocked Firebase, never operating data."""
-import asyncio,threading
+import asyncio,threading,json,hashlib
 from http.server import ThreadingHTTPServer,SimpleHTTPRequestHandler
 from playwright.async_api import async_playwright
 from firebase_mock import FIREBASE_MOCK
@@ -25,5 +25,8 @@ async def main():
   await page.reload();assert await page.evaluate('window.authSignIns||0')==0;await page.click('#login');await page.wait_for_url('**/index.html');assert await page.locator('#lessonLogout').is_hidden();assert await page.locator('#exIntent').input_value()==''
   for width in [768,390]:
    await page.set_viewport_size({'width':width,'height':900});assert await page.evaluate('document.documentElement.scrollWidth<=innerWidth')
-  assert not errors,errors;await browser.close();print('PASS: class password success/wrong/server outage, no password storage, next student cleanup, gallery session/logout and responsive UI')
+  await page.goto('http://127.0.0.1:8884/class-access/password-setup.html');await page.fill('#classId','3-1');await page.fill('#password','교사용테스트비밀번호');await page.click('#generate');await page.wait_for_selector('#result',state='visible')
+  public=json.loads(await page.locator('#publicOutput').input_value());private=json.loads(await page.locator('#privateOutput').input_value());assert public['iterations']==210000;assert private['enabled'] is True;assert private['passwordHash']==hashlib.pbkdf2_hmac('sha256','교사용테스트비밀번호'.encode(),bytes.fromhex(public['salt']),210000).hex();assert await page.locator('#password').input_value()==''
+  await page.click('#clear');assert await page.locator('#privateOutput').input_value()==''
+  assert not errors,errors;await browser.close();print('PASS: class password success/wrong/server outage, no password storage, next student cleanup, gallery session/logout, responsive UI and teacher hash setup')
 asyncio.run(main())

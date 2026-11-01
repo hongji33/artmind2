@@ -9,7 +9,6 @@ threading.Thread(target=server.serve_forever,daemon=True).start()
 Path('work').mkdir(exist_ok=True)
 source=Path('metaverse.html').read_text().replace('size();draw();\n</script>', '''size();draw();window.__test={move,changeRoom,interact,draw,getPlayer:()=>({...player}),setPlayer:(x,y)=>{player.x=x;player.y=y;draw()},getRoom:()=>currentRoom,getExhibits:()=>roomExhibits(),getKeys:()=>keys.size,getAppearance:()=>({...appearance}),getMotion:()=>({walkPhase,isWalking,seated:!!seated}),benchPoint:(x,y)=>iso(x,y,.55),getSelectedId:()=>selected?.id,getViewed:()=>[...viewed],getFabric:()=>({active:!!fabric,size:fabricScale}),project:(x,y,z)=>iso(x,y,z),getScale:()=>scale,artPoint:id=>{const h=hitRegions.find(h=>h.d.id===id);return {x:h.x,y:h.y}},doorPoint:i=>{const d=rooms[currentRoom].doors[i];return iso(d.x,d.y,1.2)}};\n</script>''')
 from firebase_mock import FIREBASE_MOCK as mock
-mock+="export const getFunctions=()=>({});export const httpsCallable=()=>async()=>{throw Error('not used in gallery regression')};"
 async def main():
  async with async_playwright() as p:
   browser=await p.chromium.launch(executable_path='/usr/bin/chromium',headless=True,args=['--no-sandbox'])

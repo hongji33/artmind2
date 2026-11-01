@@ -1,12 +1,3 @@
-// Isolated test rules only. Never deploy these in place of operating exhibit rules.
+// Test startup only. rules.test.mjs loads the actual fragment in the isolated emulator.
 rules_version = '2';
-service cloud.firestore {
- match /databases/{database}/documents {
-  match /artmind2_class_access/{classId} { allow read, write: if false; }
-  match /artmind2_class_rate_limits/{attemptId} { allow read, write: if false; }
-  match /artmind2_members/{uid} {
-   allow read: if request.auth != null && request.auth.uid == uid;
-   allow write: if false;
-  }
- }
-}
+service cloud.firestore { match /databases/{database}/documents { match /{all=**} { allow read, write: if false; } } }
