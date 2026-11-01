@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {rooms,floorAt,canStand,walls,nearDoor,exhibitionRange,roomForIndex} from '../gallery-layout.mjs';
+import {rooms,floorAt,canStand,classmateEntryPosition,walls,nearDoor,exhibitionRange,roomForIndex} from '../gallery-layout.mjs';
 for(let id=0;id<rooms.length;id++)test(`room ${id}: floor, walls, reachable exhibits and doors`,()=>{
  const r=rooms[id];assert.ok(canStand(id,r.spawn.x,r.spawn.y));
  // Flood fill a .25-unit grid, respecting avatar clearance and furniture.
@@ -42,3 +42,5 @@ test('only gallery rooms remain and the studio doorway is closed',()=>{
  assert.equal(nearDoor(0,.9,3),undefined);assert.equal(canStand(0,.1,3),false);
  assert.ok(!rooms.some(r=>r.name.includes('체험')));
 });
+
+test('30 arrivals in each room have distinct walkable positions, including colliding UID hashes',()=>{for(let room=0;room<4;room++){const peers=[];for(let i=0;i<30;i++){const point=classmateEntryPosition(room,'student'+i,peers);assert.ok(canStand(room,point.x,point.y));assert.ok(peers.every(p=>Math.hypot(p.x-point.x,p.y-point.y)>=.85));peers.push(point)}}});
