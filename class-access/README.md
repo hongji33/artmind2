@@ -50,3 +50,17 @@ python tests/browser_test.py
 ```
 
 실제 서버의 권한 규칙, callable 함수, 학교 네트워크에서 30명 동시 접속은 설치 후 별도로 확인해야 합니다. 개발 환경에서는 Node 24로 단위 검사를 실행했으며 배포 런타임은 Node 22로 지정했습니다.
+
+## Cloud Shell 설치 안내와 에뮬레이터 추가 검사
+
+관리자 설치 순서는 [CLOUD_SHELL.md](CLOUD_SHELL.md)에 정리했습니다. deploy-cloud-shell.sh는 joinClass 함수만 배포하며 요금제·Firestore 규칙·기존 작품을 변경하지 않습니다. Spark에서는 이 함수 설치를 진행하지 않습니다. Blaze 전환은 관리자가 비용 조건을 확인한 뒤 직접 결정합니다.
+
+다음 검사는 실제 프로젝트 대신 demo 프로젝트의 Auth/Firestore/Functions 에뮬레이터를 사용합니다.
+
+```sh
+firebase emulators:exec --project demo-artmind-class --config emulator.json --only auth,firestore,functions 'node tests/emulator.mjs'
+```
+
+검사 항목: 동시 입장 30명, 회원 문서 생성, 비밀번호 오류, UID 시도 제한, 인증 없는 요청 차단, 비밀번호 해시 문서 직접 열람 차단. tests/emulator.rules는 검사용 최소 규칙이므로 실제 규칙으로 배포하면 안 됩니다.
+
+현재 실행 환경에서는 에뮬레이터 다운로드가 네트워크 정책의 403 응답으로 차단되어 이 추가 검사는 **미실행**입니다. 기존 Node/모의 SDK 검사 통과와 구분해야 합니다.
