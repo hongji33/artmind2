@@ -6,7 +6,7 @@ test('free membership rules: 30 students, wrong/disabled class, privilege isolat
  const rules=await readFile(new URL('../firestore.rules',import.meta.url),'utf8');
  const env=await initializeTestEnvironment({projectId:'demo-artmind-free',firestore:{host:'127.0.0.1',port:8086,rules}});
  try{
-  const salt='0123456789abcdef0123456789abcdef',proof=await derivePasswordProof('emulator-password',salt);
+  const salt='0123456789abcdef0123456789abcdef',proof=await derivePasswordProof('1111',salt);
   await env.withSecurityRulesDisabled(async c=>{const db=c.firestore();await setDoc(doc(db,'artmind2_class_access','1-1'),{enabled:true,passwordHash:proof});await setDoc(doc(db,'artmind2_class_access','1-2'),{enabled:false,passwordHash:proof});await setDoc(doc(db,'artmind2_class_public','1-1'),{salt,iterations:210000})});
   const entry=()=>({classId:'1-1',nickname:'별',passwordProof:proof,joinedAt:serverTimestamp()});
   const db=env.authenticatedContext('student').firestore(),self=doc(db,'artmind2_members','student');
@@ -43,5 +43,18 @@ test('free membership rules: 30 students, wrong/disabled class, privilege isolat
 
   await assertFails(getDoc(doc(env.authenticatedContext('other').firestore(),'artmind2_members','student')));
   await Promise.all(Array.from({length:30},(_,i)=>{const uid='classmate-'+i;return assertSucceeds(setDoc(doc(env.authenticatedContext(uid).firestore(),'artmind2_members',uid),entry()))}));
+  await env.withSecurityRulesDisabled(async c=>{await setDoc(doc(c.firestore(),'artmind2_teachers','teacher'),{enabled:true,classIds:['3-1']})});
+  const teacher=env.authenticatedContext('teacher').firestore();
+  await assertSucceeds(getDoc(doc(teacher,'artmind2_teachers','teacher')));
+  await assertFails(setDoc(doc(db,'artmind2_teachers','student'),{enabled:true,classIds:['1-1']}));
+  await assertFails(getDoc(doc(db,'artmind2_teachers','teacher')));
+  await assertFails(updateDoc(doc(teacher,'artmind2_teachers','teacher'),{classIds:['3-1','3-2']}));
+  await assertSucceeds(setDoc(doc(teacher,'artmind2_class_public','3-1'),{salt,iterations:210000}));
+  await assertSucceeds(setDoc(doc(teacher,'artmind2_class_access','3-1'),{enabled:true,passwordHash:proof}));
+  await assertSucceeds(setDoc(doc(teacher,'artmind2_class_access','3-1'),{enabled:true,passwordHash:'1'.repeat(64)}));
+  await assertFails(setDoc(doc(teacher,'artmind2_class_public','3-2'),{salt,iterations:210000}));
+  await assertFails(setDoc(doc(teacher,'artmind2_class_access','3-2'),{enabled:true,passwordHash:proof}));
+  await assertFails(setDoc(doc(db,'artmind2_class_access','1-1'),{enabled:true,passwordHash:proof}));
+
  }finally{await env.cleanup()}
 });
