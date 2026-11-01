@@ -17,9 +17,10 @@ async def main():
   errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
   await page.context.route('**/*',lambda route: route.fulfill(content_type='text/javascript',body=mock) if 'www.gstatic.com/firebasejs/' in route.request.url else route.fulfill(content_type='text/html',body=source) if route.request.url.split('?')[0].endswith('/metaverse.html') else route.continue_() if route.request.url.startswith('http://127.0.0.1') else route.abort())
   await page.goto('http://127.0.0.1:8765/metaverse.html');await page.wait_for_function('window.__test && window.__test.getExhibits && document.querySelector("#status").textContent.includes("가까이")')
+  assert not await page.locator('#customization').evaluate('(el)=>el.open');await page.locator('#customization > summary').click()
   await page.select_option('#appearance-hair','3');await page.select_option('#appearance-outfit','4');await page.select_option('#appearance-skin','2');assert (await page.evaluate('__test.getAppearance()'))['hair']==3
   assert not any(x[0] in ('like','comment') for x in await page.evaluate('window.calls'))
-  await page.reload();await page.wait_for_function('window.__test && window.__test.getAppearance().hair===3');assert (await page.evaluate('__test.getAppearance()'))['outfit']==4
+  await page.reload();await page.wait_for_function('window.__test && window.__test.getAppearance().hair===3');assert (await page.evaluate('__test.getAppearance()'))['outfit']==4;await page.locator('#customization > summary').click()
   # Expressions persist and each choice changes the rendered face.
   faces=[]
   for expression in range(6):
@@ -29,7 +30,7 @@ async def main():
   await page.locator('.fabric-tools summary').click();before=await page.locator('#avatarPreview').evaluate('e=>e.toDataURL()')
   pad=await page.locator('#fabricPad').bounding_box();await page.mouse.move(pad['x']+30,pad['y']+30);await page.mouse.down();await page.mouse.move(pad['x']+100,pad['y']+100,steps=8);await page.mouse.up();await page.click('#fabricApply');assert (await page.evaluate('__test.getFabric()'))['active'];assert await page.locator('#avatarPreview').evaluate('e=>e.toDataURL()')!=before
   await page.locator('#fabricScale').fill('36');await page.locator('#fabricScale').dispatch_event('input');assert (await page.evaluate('__test.getFabric()'))['size']==36
-  await page.reload();await page.wait_for_function('window.__test && __test.getFabric().active');assert (await page.evaluate('__test.getAppearance()'))['expression']==5;assert (await page.evaluate('__test.getFabric()'))['size']==36
+  await page.reload();await page.wait_for_function('window.__test && __test.getFabric().active');assert (await page.evaluate('__test.getAppearance()'))['expression']==5;assert (await page.evaluate('__test.getFabric()'))['size']==36;await page.locator('#customization > summary').click()
   await page.locator('.fabric-tools summary').click();await page.click('#fabricRemove');assert not (await page.evaluate('__test.getFabric()'))['active'];assert await page.locator('#avatarPreview').evaluate('e=>e.toDataURL()')==before
   # A real local PNG upload takes the same bounded path as the student's image.
   import base64

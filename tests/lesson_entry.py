@@ -20,7 +20,9 @@ async def main():
   # Existing artwork selection and the local appreciation flow remain available.
   pick=page.locator('button[data-pick]').first
   assert await pick.count()==1
-  await pick.click();await page.locator('[data-page="exhibition"]').click();await page.wait_for_selector('#exTitle',state='visible')
+  await pick.click();assert await page.locator('#dock .dock-actions button').count()==1;assert await page.locator('#startBtn').inner_text()=='감상문 작성하기 →';await page.click('#startBtn');await page.wait_for_selector('#exTitle',state='visible')
+  assert await page.locator('.ex-identity').is_hidden();assert await page.locator('#exGrade').input_value()=='1';assert await page.locator('#exNickname').input_value()=='푸른별'
+  await page.screenshot(path='work/compact-exhibition.png',full_page=True)
   assert await page.locator('#exNickname').input_value()=='푸른별'
   await page.fill('#exTitle','내 마음의 빛');await page.fill('#exIntent','색과 선을 관찰하며 내 마음을 돌아보았습니다.')
   await page.locator('[data-mind-element="color"]').click();await page.fill('#mind-color','화면 속 색의 대비를 관찰했습니다.')
