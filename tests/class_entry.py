@@ -7,8 +7,8 @@ from class_mock import MOCK
 class Quiet(SimpleHTTPRequestHandler):
  def log_message(self,*args):pass
 server=ThreadingHTTPServer(('127.0.0.1',8884),Quiet);threading.Thread(target=server.serve_forever,daemon=True).start()
-async def enter(page,password='1111',nickname='푸른별'):
- await page.select_option('#loginGrade','1');await page.select_option('#loginClass','1');await page.fill('#loginNickname',nickname);await page.fill('#loginPassword',password);await page.click('#lessonLogin');await page.wait_for_function('!document.querySelector("#lessonLogin").disabled')
+async def enter(page,password='1111',nickname='푸른별',grade='1'):
+ await page.select_option('#loginGrade',grade);await page.select_option('#loginClass','1');await page.fill('#loginNickname',nickname);await page.fill('#loginPassword',password);await page.click('#lessonLogin');await page.wait_for_function('!document.querySelector("#lessonLogin").disabled')
 async def main():
  async with async_playwright() as p:
   browser=await p.chromium.launch(executable_path='/usr/bin/chromium',args=['--no-sandbox']);context=await browser.new_context();page=await context.new_page();errors=[];page.on('pageerror',lambda e:errors.append(e.stack))
@@ -16,11 +16,11 @@ async def main():
   await page.goto('http://127.0.0.1:8884/index.html');assert await page.locator('#lessonLogout').is_hidden();assert await page.evaluate('window.authSignIns||0')==0
   await enter(page,'2222');assert '맞지 않습니다' in await page.locator('#lessonAuthStatus').inner_text();assert await page.locator('#onlinePublish').is_disabled();assert await page.locator('#loginPassword').input_value()==''
   await page.evaluate('window.serverDown=true');await enter(page);assert '확인하지 못했습니다' in await page.locator('#lessonAuthStatus').inner_text();assert await page.locator('#onlinePublish').is_disabled()
-  await page.evaluate('window.serverDown=false');await enter(page);assert '입장 완료' in await page.locator('#lessonAuthStatus').inner_text();assert '푸른별' in await page.locator('#lessonStudentName').inner_text();assert await page.locator('#onlinePublish').is_enabled()
+  await page.evaluate('window.serverDown=false');await enter(page,nickname='피카소1',grade='3');assert '입장 완료' in await page.locator('#lessonAuthStatus').inner_text();assert await page.locator('#lessonStudentName').inner_text()=='3학년 1반 피카소1';assert await page.locator('#onlinePublish').is_enabled()
   assert not await page.evaluate("JSON.stringify({...localStorage,...sessionStorage}).includes('1111')")
   await page.locator('button[data-pick]').first.click();await page.locator('[data-page="exhibition"]').click();await page.fill('#exIntent','이전 학생 자료')
   await enter(page,nickname='다음별');assert await page.locator('#exIntent').input_value()=='';assert '다음별' in await page.locator('#lessonStudentName').inner_text()
-  await page.goto('http://127.0.0.1:8884/metaverse.html');await page.wait_for_function('document.querySelector("#identity").textContent.includes("다음별")');assert '1-1' in await page.locator('#identity').inner_text()
+  await page.goto('http://127.0.0.1:8884/metaverse.html');await page.wait_for_function('document.querySelector("#identity").textContent.includes("다음별")');assert await page.locator('#identity').inner_text()=='1학년 1반 다음별';assert await page.locator('#authMessage').inner_text()==''
   page.once('dialog',lambda d:d.accept());await page.click('#logout');await page.wait_for_function('document.querySelector("#identity").textContent==="로그아웃 상태"');assert await page.evaluate("sessionStorage.getItem('artmind2-class-entry-v1')") is None
   await page.reload();assert await page.evaluate('window.authSignIns||0')==0;await page.click('#login');await page.wait_for_url('**/index.html');assert await page.locator('#lessonLogout').is_hidden();assert await page.locator('#exIntent').input_value()==''
   for width in [768,390]:
