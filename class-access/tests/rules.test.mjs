@@ -1,6 +1,6 @@
 import test from 'node:test';import {readFile} from 'node:fs/promises';
 import {initializeTestEnvironment,assertFails,assertSucceeds} from '@firebase/rules-unit-testing';
-import {doc,getDoc,setDoc,updateDoc,deleteField,serverTimestamp,getDocs,collection,query,where} from 'firebase/firestore';
+import {doc,getDoc,setDoc,updateDoc,deleteField,serverTimestamp,writeBatch,getDocs,collection,query,where} from 'firebase/firestore';
 import {derivePasswordProof} from '../password-crypto.mjs';
 test('free membership rules: 30 students, wrong/disabled class, privilege isolation and cleanup',async()=>{
  const rules=await readFile(new URL('../firestore.rules',import.meta.url),'utf8');
@@ -55,6 +55,11 @@ test('free membership rules: 30 students, wrong/disabled class, privilege isolat
   await assertFails(setDoc(doc(teacher,'artmind2_class_public','3-2'),{salt,iterations:210000}));
   await assertFails(setDoc(doc(teacher,'artmind2_class_access','3-2'),{enabled:true,passwordHash:proof}));
   await assertFails(setDoc(doc(db,'artmind2_class_access','1-1'),{enabled:true,passwordHash:proof}));
+  await env.withSecurityRulesDisabled(async c=>{await setDoc(doc(c.firestore(),'artmind2_teachers','teacher'),{enabled:true,classIds:Array.from({length:10},(_,i)=>'3-'+(i+1))})});
+  const batch=writeBatch(teacher);
+  for(let i=1;i<=10;i++){batch.set(doc(teacher,'artmind2_class_public','3-'+i),{salt,iterations:210000});batch.set(doc(teacher,'artmind2_class_access','3-'+i),{enabled:true,passwordHash:proof})}
+  await assertSucceeds(batch.commit());
+
 
  }finally{await env.cleanup()}
 });
