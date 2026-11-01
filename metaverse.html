@@ -188,9 +188,17 @@ function clearStudentView(){
  $('modalArt').replaceChildren();$('commentList').replaceChildren();$('like').disabled=true;$('send').disabled=true;
  currentRoom=0;specialPage=0;seated=null;$('standUp').hidden=true;Object.assign(player,rooms[0].spawn);document.querySelectorAll('[data-room]').forEach(b=>b.classList.toggle('active',b.dataset.room==='0'));$('extraPages').hidden=true;updateProgress();text('count','로그인 후 우리 반 전시를 볼 수 있습니다.');draw();
 }
+function clearPersonalAvatar(){
+ customAvatar=null;appearance={...defaultAppearance};avatarStyle=0;fabric=null;fabricScale=24;
+ for(const key of ['artmind-avatar-style','artmind-appearance-v2','artmind-fabric-v1','artmind2-profile-owner-v1','maeum-v1','artmind2-student-identity-v1']){try{localStorage.removeItem(key)}catch{}}
+ try{for(const key of Object.keys(localStorage))if(key.startsWith('artmind-viewed-v1:'))localStorage.removeItem(key)}catch{}
+ for(const [field,value] of Object.entries(appearance)){const input=$('appearance-'+field);if(input)input.value=value}
+ $('avatarUpload').value='';$('fabricUpload').value='';$('fabricScale').value='24';$('fabricRemove').click();$('fabricClear').click();appearancePreview();
+}
 async function handleAuth(u){
  const epoch=++authEpoch;user=signedOut?null:u;clearStudentView();authControls();
- if(!user){text('identity','로그아웃 상태');text('roomTitle','학생 로그인 후 감상할 수 있습니다.');text('status','학생 로그인 버튼을 눌러 주세요.');text('authMessage','익명 로그인은 다시 로그인할 때 학생 ID가 바뀌어 학급 재승인이 필요할 수 있습니다.');return}
+ if(!user){clearPersonalAvatar();text('identity','로그아웃 상태');text('roomTitle','학생 로그인 후 감상할 수 있습니다.');text('status','학생 로그인 버튼을 눌러 주세요.');text('authMessage','익명 로그인은 다시 로그인할 때 학생 ID가 바뀌어 학급 재승인이 필요할 수 있습니다.');return}
+ let owner=null;try{owner=localStorage.getItem('artmind2-profile-owner-v1')}catch{}if(owner!==u.uid){clearPersonalAvatar();try{localStorage.setItem('artmind2-profile-owner-v1',u.uid)}catch{}}
  text('identity','학생 정보 확인 중…');text('authMessage','익명 계정입니다. 로그아웃하면 같은 승인 ID로 돌아오지 못할 수 있습니다.');
  try{
   const snap=await getDoc(doc(db,'artmind2_members',u.uid));if(epoch!==authEpoch||signedOut||auth.currentUser?.uid!==u.uid)return;
