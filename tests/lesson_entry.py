@@ -2,6 +2,7 @@
 import asyncio,json,threading
 from http.server import ThreadingHTTPServer,SimpleHTTPRequestHandler
 from playwright.async_api import async_playwright
+from image_fixture import PNG
 from class_mock import MOCK as FIREBASE_MOCK
 class Quiet(SimpleHTTPRequestHandler):
  def log_message(self,*args):pass
@@ -10,7 +11,7 @@ async def main():
  async with async_playwright() as p:
   browser=await p.chromium.launch(executable_path='/usr/bin/chromium',args=['--no-sandbox'])
   context=await browser.new_context(viewport={'width':1440,'height':1000});page=await context.new_page();errors=[];page.on('pageerror',lambda e:errors.append(e.stack))
-  await context.route('**/*',lambda r:r.fulfill(content_type='text/javascript',body=FIREBASE_MOCK) if 'www.gstatic.com/firebasejs/' in r.request.url else r.fulfill(content_type='text/html',body='<h1>메타버스 연결 검증</h1>') if '/metaverse.html' in r.request.url else r.continue_() if r.request.url.startswith('http://127.0.0.1:8881') else r.abort())
+  await context.route('**/*',lambda r:r.fulfill(content_type='image/png',body=PNG) if r.request.resource_type=='image' else r.fulfill(content_type='text/javascript',body=FIREBASE_MOCK) if 'www.gstatic.com/firebasejs/' in r.request.url else r.fulfill(content_type='text/html',body='<h1>메타버스 연결 검증</h1>') if '/metaverse.html' in r.request.url else r.continue_() if r.request.url.startswith('http://127.0.0.1:8881') else r.abort())
   await context.add_init_script("localStorage.setItem('maeum-v1',JSON.stringify({draft:'이전 학생 대본',name:'이전 이름',collection:[{draft:'이전 작품'}],exhibit:{title:'이전 전시',intent:'이전 친구에게 전할 마음'}}));localStorage.setItem('artmind2-student-identity-v1',JSON.stringify({grade:'3',classroom:'9',nickname:'이전 학생'}))")
   await page.goto('http://127.0.0.1:8881/index.html');await page.wait_for_selector('#lessonLogin')
   assert await page.locator('#exIntent').input_value()=='';assert await page.locator('#exTitle').input_value()=='';assert await page.evaluate("localStorage.getItem('maeum-v1')") is None
