@@ -32,7 +32,7 @@
   "museum_presence": {
    "$host": {
     "$class": {
-     ".read": "auth != null && root.child('museum_members').child($host).child(auth.uid).child('classId').val() == $class && root.child('museum_members').child($host).child(auth.uid).child('joinedAt').val() > now - 43200000",
+     ".read": "auth != null && ((auth.uid == $host && auth.token.firebase.sign_in_provider == 'password') || (root.child('museum_members').child($host).child(auth.uid).child('classId').val() == $class && root.child('museum_members').child($host).child(auth.uid).child('joinedAt').val() > now - 43200000))",
      "$uid": {
       "$session": {
        ".write": "auth != null && auth.uid == $uid && (!newData.exists() || (root.child('museum_members').child($host).child($uid).child('classId').val() == $class && root.child('museum_members').child($host).child($uid).child('joinedAt').val() > now - 43200000))",

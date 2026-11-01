@@ -37,7 +37,7 @@ async def main():
    mock_sources[context]=mock
    async def route(r):
     url=r.request.url
-    if url.endswith('firebase-database.js'):return await r.fulfill(content_type='text/javascript',body=bridged)
+    if url.split('?')[0].endswith('firebase-database.js'):return await r.fulfill(content_type='text/javascript',body=bridged)
     if 'www.gstatic.com/firebasejs/' in url:return await r.fulfill(content_type='text/javascript',body=mock_sources[r.request.frame.page.context])
     if url.split('?')[0].endswith('/metaverse.html'):return await r.fulfill(content_type='text/html',body=source)
     return await r.continue_() if url.startswith('http://127.0.0.1:8890') else await r.abort()

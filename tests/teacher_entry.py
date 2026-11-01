@@ -20,6 +20,7 @@ async def main():
   assert await page.locator('#accountForm').is_visible();assert not await page.get_by_text('교사 ID 복사').count()
   await signup(page,'first@example.com');assert await page.locator('#dashboard').is_visible();assert await page.locator('#accountPanel').is_hidden();assert await page.locator('#classCount').inner_text()=='0'
   await add_class(page,1,'1111');await add_class(page,2,'2222');assert await page.locator('#pinRows tr').count()==2
+  museum=page.get_by_role('link',name='3-1 교사 미술관 보기 (새 탭)',exact=True);assert 'mode=teacher' in await museum.get_attribute('href');assert 'teacher=TeacherA' in await museum.get_attribute('href');assert 'class=3-1' in await museum.get_attribute('href')
   link=page.get_by_role('link',name='3-1 학생 화면 열기 (새 탭)',exact=True);assert await link.get_attribute('target')=='_blank';assert 'teacher=TeacherA' in await link.get_attribute('href');assert 'class=3-1' in await link.get_attribute('href');assert await page.get_by_role('button',name='링크 복사',exact=True).count()==2
   await page.locator('#pinRows tr').first.get_by_role('button',name='입장 QR',exact=True).click();assert await page.locator('#entryQrTitle').inner_text()=='3학년 1반';assert await page.locator('#entryQrCode svg').count()==1;assert await page.locator('#entryQrUrl').input_value()==await link.get_attribute('href')
   await page.locator('#entryQrCode').screenshot(path='work/entry-qr-3-1.png');await page.screenshot(path='work/entry-qr-screen.png')
