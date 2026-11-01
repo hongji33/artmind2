@@ -1,31 +1,40 @@
-"""Teacher management UI with mocked Auth/Firestore. Never changes live data."""
-import asyncio,threading,json,hashlib
+"""Teacher account/dashboard integration. Firebase is mocked; no operating data changes."""
+import asyncio,threading,hashlib
 from http.server import ThreadingHTTPServer,SimpleHTTPRequestHandler
 from playwright.async_api import async_playwright
-MOCK="""export const initializeApp=(config,name)=>{window.appName=name;return {}};export const getAuth=()=>window.auth={currentUser:null};export const onAuthStateChanged=(a,cb)=>{window.cb=cb;cb(a.currentUser)};export const signInAnonymously=async a=>{a.currentUser={uid:'teacher-device'};await window.cb(a.currentUser);return {user:a.currentUser}};export const signOut=async a=>{a.currentUser=null;await window.cb(null)};export const getFirestore=()=>({});export const doc=(db,...p)=>p.join('/');export const getDoc=async()=>({exists:()=>window.approved===true,data:()=>({enabled:true,classIds:['3-1','3-2']})});export const writeBatch=()=>{const pending=[];return {set:(...p)=>pending.push(p),commit:async()=>{if(window.failSave)throw Error('permission-denied');window.saved=pending;window.commits=(window.commits||0)+1}}};"""
+from teacher_mock import MOCK
 class Quiet(SimpleHTTPRequestHandler):
  def log_message(self,*args):pass
 server=ThreadingHTTPServer(('127.0.0.1',8885),Quiet);threading.Thread(target=server.serve_forever,daemon=True).start()
+async def setup(browser,legacy=False):
+ context=await browser.new_context();await context.add_init_script("localStorage.setItem('artmind-gallery-signed-out-v1','student-marker');"+("window.initialAnon=true;window.records={'artmind2_teachers/LegacyTeacher':{enabled:true,classIds:['3-1']},'artmind2_class_public/3-1':{salt:'0123456789abcdef0123456789abcdef',iterations:210000},'artmind2_class_access/3-1':{enabled:true,passwordHash:'0'.repeat(64)},'artmind2_exhibits/old-work':{classId:'3-1',title:'기존 작품',story:'기존 감상문',nickname:'별',work:{}}};" if legacy else ''))
+ await context.route('**/*',lambda r:r.fulfill(content_type='text/javascript',body=MOCK) if 'www.gstatic.com/firebasejs/' in r.request.url else r.continue_() if r.request.url.startswith('http://127.0.0.1:8885') else r.abort());page=await context.new_page();await page.goto('http://127.0.0.1:8885/teacher.html');return context,page
+async def signup(page,email):
+ await page.click('#accountMode');await page.fill('#displayName','미술 선생님');await page.fill('#email',email);await page.fill('#password','teacher-pass');await page.fill('#passwordConfirm','teacher-pass');await page.click('#accountSubmit');await page.wait_for_function('!document.querySelector("#settings").disabled')
+async def add_class(page,number,pin):
+ await page.select_option('#newGrade','3');await page.select_option('#newClass',str(number));await page.fill('#newPin',pin);await page.click('#createForm button');await page.wait_for_function('!document.querySelector("#createFields").disabled')
 async def main():
  async with async_playwright() as p:
-  browser=await p.chromium.launch(executable_path='/usr/bin/chromium',args=['--no-sandbox']);page=await browser.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
-  await page.add_init_script("localStorage.setItem('artmind-gallery-signed-out-v1','student-marker')")
-  await page.route('**/*',lambda r:r.fulfill(content_type='text/javascript',body=MOCK) if 'www.gstatic.com/firebasejs/' in r.request.url else r.continue_() if r.request.url.startswith('http://127.0.0.1:8885') else r.abort())
-  await page.goto('http://127.0.0.1:8885/teacher.html');await page.wait_for_function('window.appName===\"artmind-teacher\"');await page.click('#connect');assert await page.locator('#settings').evaluate('(el)=>el.disabled');assert 'teacher-device' in await page.locator('#teacherId').inner_text()
-  await page.evaluate('window.approved=true');await page.click('#refresh');await page.wait_for_function('!document.querySelector("#settings").disabled');assert await page.locator('#pinRows tr').count()==2
-  first=page.locator('[data-pin="3-1"]');second=page.locator('[data-pin="3-2"]')
-  await page.click('#save');assert '입력' in await page.locator('#status').inner_text();assert await page.evaluate('window.commits||0')==0
-  await first.fill('123');await page.click('#save');assert await page.evaluate('window.commits||0')==0
-  await first.fill('1111');await second.fill('2222');await page.locator('#showPin').uncheck();assert await first.get_attribute('type')=='password';await page.locator('#showPin').check()
-  await page.click('#save');await page.wait_for_function('!document.querySelector("#settings").disabled');assert '2개 반 비밀번호를 저장했습니다' in await page.locator('#status').inner_text();assert await page.evaluate('window.commits')==1
-  saved=await page.evaluate('window.saved');assert len(saved)==4
-  for index,(class_id,pin) in enumerate([('3-1','1111'),('3-2','2222')]):
-   public,private=saved[index*2:index*2+2];assert public[0]=='artmind2_class_public/'+class_id;assert private[0]=='artmind2_class_access/'+class_id;assert private[1]['passwordHash']==hashlib.pbkdf2_hmac('sha256',pin.encode(),bytes.fromhex(public[1]['salt']),210000).hex()
-  assert saved[0][1]['salt']!=saved[2][1]['salt'];assert await first.input_value()=='';assert await second.input_value()==''
-  await first.fill('0123');await page.locator('[aria-label="3-1 새 입장 허용"]').uncheck();await page.click('#save');await page.wait_for_function('!document.querySelector("#settings").disabled');saved=await page.evaluate('window.saved');assert len(saved)==2;assert all('/3-1' in item[0] for item in saved);assert saved[1][1]['enabled'] is False;assert saved[1][1]['passwordHash']==hashlib.pbkdf2_hmac('sha256',b'0123',bytes.fromhex(saved[0][1]['salt']),210000).hex()
-  before=await page.evaluate('JSON.stringify(window.saved)');await page.evaluate('window.failSave=true');await first.fill('3333');await second.fill('4444');await page.click('#save');await page.wait_for_function('!document.querySelector("#settings").disabled');assert '저장하지 못했습니다' in await page.locator('#status').inner_text();assert await page.evaluate('JSON.stringify(window.saved)')==before;assert await first.input_value()=='3333';assert await second.input_value()=='4444'
+  browser=await p.chromium.launch(executable_path='/usr/bin/chromium',args=['--no-sandbox']);context,page=await setup(browser);errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
+  assert await page.locator('#accountForm').is_visible();assert not await page.get_by_text('교사 ID 복사').count()
+  await signup(page,'first@example.com');assert await page.locator('#dashboard').is_visible();assert await page.locator('#accountPanel').is_hidden();assert await page.locator('#classCount').inner_text()=='0'
+  await add_class(page,1,'1111');await add_class(page,2,'2222');assert await page.locator('#pinRows tr').count()==2
+  await page.locator('[data-pin="space:3-1"]').fill('0123');await page.locator('[data-pin="space:3-2"]').fill('3333');await page.click('#save');await page.wait_for_function('!document.querySelector("#settings").disabled');assert '2개 반' in await page.locator('#status').inner_text()
+  for number,pin in [(1,'0123'),(2,'3333')]:
+   data=await page.evaluate('(n)=>[window.records["artmind2_spaces/TeacherA/classes/3-"+n],window.records["artmind2_spaces/TeacherA/private_classes/3-"+n]]',number);assert data[1]['passwordHash']==hashlib.pbkdf2_hmac('sha256',pin.encode(),bytes.fromhex(data[0]['salt']),210000).hex()
+  await page.evaluate("window.records['artmind2_spaces/TeacherA/exhibits/student']={owner:'student',classId:'3-1',nickname:'피카소',title:'<img src=x>작품',story:'감상 이야기',work:{artist:'작가',title:'작품'}}")
+  await page.screenshot(path='work/teacher-account-dashboard.png',full_page=True)
+  await page.select_option('#artClass','space:3-1');await page.click('#reloadArt');await page.wait_for_selector('.art-card');await page.get_by_role('button',name='감상문 보기').click();assert await page.locator('#artStory').inner_text()=='감상 이야기';await page.click('#closeArt')
+  await page.get_by_role('button',name='갤러리 숨김',exact=True).click();await page.wait_for_function('!document.querySelector("#settings").disabled');assert await page.evaluate("window.records['artmind2_spaces/TeacherA/exhibits/student'].hidden") is True
+  await page.get_by_role('button',name='다시 전시',exact=True).click();await page.wait_for_function('!document.querySelector("#settings").disabled');assert await page.evaluate("window.records['artmind2_spaces/TeacherA/exhibits/student'].hidden") is False
+  row=page.locator('tr:has([data-pin="space:3-2"])');page.once('dialog',lambda d:d.accept());await row.get_by_role('button',name='반 보관').click();await page.wait_for_function('!document.querySelector("#settings").disabled');assert await row.is_hidden();await page.locator('#showArchived').check();page.once('dialog',lambda d:d.accept());await row.get_by_role('button',name='복원').click();await page.wait_for_function('!document.querySelector("#settings").disabled');assert await row.is_visible()
+  before=await page.evaluate('JSON.stringify(window.records)');await page.evaluate('window.failWrite=true');await page.locator('[data-pin="space:3-1"]').fill('4444');await page.click('#save');await page.wait_for_function('!document.querySelector("#settings").disabled');assert await page.evaluate('JSON.stringify(window.records)')==before;assert await page.locator('[data-pin="space:3-1"]').input_value()=='4444';await page.evaluate('window.failWrite=false')
   assert await page.evaluate("localStorage.getItem('artmind-gallery-signed-out-v1')")=='student-marker'
   for width in [768,390]:
    await page.set_viewport_size({'width':width,'height':900});assert await page.evaluate('document.documentElement.scrollWidth<=innerWidth')
-  assert not errors,errors;await browser.close();print('PASS: teacher approval gate, assigned-class table, two PINs in one batch, blank rows unchanged, leading zeros, validation, show/hide PINs, atomic failure with retry values, separate app, responsive UI')
+  await page.click('#logout');await page.wait_for_selector('#accountForm',state='visible');await page.fill('#email','first@example.com');await page.click('#resetPassword');assert await page.evaluate('window.resetSent')==1
+  await page.fill('#password','wrong-password');await page.click('#accountSubmit');assert await page.locator('#accountPanel').is_visible();assert await page.locator('#accountStatus').is_visible();assert '아이디 또는 비밀번호' in await page.locator('#accountStatus').inner_text();await page.fill('#password','teacher-pass');await page.click('#accountSubmit');await page.wait_for_function('!document.querySelector("#settings").disabled');assert await page.locator('#pinRows tr').count()==2
+  await page.click('#logout');await signup(page,'second@example.com');assert await page.locator('#pinRows tr').count()==0;await add_class(page,1,'5555');assert await page.evaluate("'artmind2_spaces/TeacherB/classes/3-1' in window.records") is True;assert await page.evaluate("window.records['artmind2_spaces/TeacherA/classes/3-1'].enabled") is True
+  legacy,old=await setup(browser,True);old.on('pageerror',lambda e:errors.append(str(e)));await signup(old,'legacy@example.com');assert await old.evaluate('window.teacherAuth.currentUser.uid')=='LegacyTeacher';assert ['link','LegacyTeacher'] in await old.evaluate('window.authEvents');await old.wait_for_selector('.art-card');assert '기존 작품' in await old.locator('#artGrid').inner_text();assert await old.evaluate("window.records['artmind2_exhibits/old-work'].story")=='기존 감상문'
+  assert not errors,errors;await browser.close();print('PASS: email signup/login/reset/logout; same-UID legacy upgrade; teacher workspaces; class create/archive/restore; bulk PIN change and failure; artwork view/hide/restore; responsive UI; no operating Firebase writes')
 asyncio.run(main())
